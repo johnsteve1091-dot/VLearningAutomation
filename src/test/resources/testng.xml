@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <suite name="V Learning Foundation">
-    <test name="Login input visibility">
+    <test name="Login input visibility and Register validation">
         <classes>
             <class name="vn.cybersoft.vlearning.tests.LoginTests"/>
+            <class name="vn.cybersoft.vlearning.tests.RegisterTests"/>
         </classes>
     </test>
 </suite>
