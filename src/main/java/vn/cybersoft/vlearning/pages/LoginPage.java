@@ -12,6 +12,9 @@ public class LoginPage extends BasePage {
     private static final By PASSWORD_INPUT =
             By.xpath("//form[.//h1[normalize-space()='Đăng nhập']]//input[@name='matKhau']");
 
+    private static final By REGISTER_BUTTON =
+            By.xpath("//div[contains(@class,'overlay-panel') and contains(@class,'overlay-right')]//button[@id='signUp' and normalize-space()='Đăng ký']");
+
     public LoginPage(WebDriver driver) {
         super(driver);
     }
@@ -22,5 +25,10 @@ public class LoginPage extends BasePage {
 
     public boolean isPasswordInputDisplayed() {
         return isDisplayed(PASSWORD_INPUT);
+    }
+
+    public RegisterPage goToRegisterPage() {
+        click(REGISTER_BUTTON);
+        return new RegisterPage(driver);
     }
 }

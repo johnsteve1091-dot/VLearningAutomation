@@ -1,0 +1,146 @@
+package vn.cybersoft.vlearning.pages;
+
+import org.openqa.selenium.By;
+import org.openqa.selenium.ElementClickInterceptedException;
+import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import vn.cybersoft.vlearning.core.BasePage;
+
+public class RegisterPage extends BasePage {
+
+    private static final By ACCOUNT_INPUT =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='taiKhoan']");
+    private static final By FULL_NAME_INPUT =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='hoTen']");
+    private static final By PASSWORD_INPUT =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='matKhau']");
+    private static final By EMAIL_INPUT =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='email']");
+    private static final By PHONE_INPUT =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='soDT']");
+    private static final By GROUP_DROPDOWN =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//select[contains(@class,'maNhom')]");
+    private static final By REGISTER_BUTTON =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//button[@type='submit' and normalize-space()='Đăng ký']");
+
+    private static final By ACCOUNT_ERROR =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='taiKhoan']/following-sibling::div[contains(@class,'errorMessage')][1]");
+    private static final By FULL_NAME_ERROR =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='hoTen']/following-sibling::div[contains(@class,'errorMessage')][1]");
+    private static final By PASSWORD_ERROR =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='matKhau']/following-sibling::div[contains(@class,'errorMessage')][1]");
+    private static final By EMAIL_ERROR =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='email']/following-sibling::div[contains(@class,'errorMessage')][1]");
+    private static final By PHONE_ERROR =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='soDT']/following-sibling::div[contains(@class,'errorMessage')][1]");
+
+    public RegisterPage(WebDriver driver) {
+        super(driver);
+    }
+
+    public boolean isAccountInputDisplayed() {
+        return isControlDisplayed(ACCOUNT_INPUT);
+    }
+
+    public boolean isFullNameInputDisplayed() {
+        return isControlDisplayed(FULL_NAME_INPUT);
+    }
+
+    public boolean isPasswordInputDisplayed() {
+        return isControlDisplayed(PASSWORD_INPUT);
+    }
+
+    public boolean isEmailInputDisplayed() {
+        return isControlDisplayed(EMAIL_INPUT);
+    }
+
+    public boolean isPhoneInputDisplayed() {
+        return isControlDisplayed(PHONE_INPUT);
+    }
+
+    public boolean isGroupDropdownDisplayed() {
+        return isControlDisplayed(GROUP_DROPDOWN);
+    }
+
+    public boolean isRegisterButtonDisplayed() {
+        return isControlDisplayed(REGISTER_BUTTON);
+    }
+
+    public void enterAccount(String account) {
+        enterText(ACCOUNT_INPUT, account);
+    }
+
+    public void enterFullName(String fullName) {
+        enterText(FULL_NAME_INPUT, fullName);
+    }
+
+    public void enterPassword(String password) {
+        enterText(PASSWORD_INPUT, password);
+    }
+
+    public void enterEmail(String email) {
+        enterText(EMAIL_INPUT, email);
+    }
+
+    public void enterPhone(String phone) {
+        enterText(PHONE_INPUT, phone);
+    }
+
+    public void clickRegister() {
+        // A visible button can still be covered while the panel is animating.
+        getWait().until(currentDriver -> {
+            try {
+                WebElement button = ExpectedConditions.elementToBeClickable(REGISTER_BUTTON)
+                        .apply(currentDriver);
+                if (button == null) {
+                    return false;
+                }
+                button.click();
+                return true;
+            } catch (ElementClickInterceptedException | StaleElementReferenceException exception) {
+                return false;
+            }
+        });
+    }
+
+    public String getAccountErrorMessage() {
+        return getValidationMessage(ACCOUNT_ERROR);
+    }
+
+    public String getFullNameErrorMessage() {
+        return getValidationMessage(FULL_NAME_ERROR);
+    }
+
+    public String getPasswordErrorMessage() {
+        return getValidationMessage(PASSWORD_ERROR);
+    }
+
+    public String getEmailErrorMessage() {
+        return getValidationMessage(EMAIL_ERROR);
+    }
+
+    public String getPhoneErrorMessage() {
+        return getValidationMessage(PHONE_ERROR);
+    }
+
+    // Return absence on a visibility timeout so SoftAssert can check every field.
+    // Other WebDriver errors still propagate as test failures.
+    private boolean isControlDisplayed(By locator) {
+        try {
+            return isDisplayed(locator);
+        } catch (TimeoutException exception) {
+            return false;
+        }
+    }
+
+    private String getValidationMessage(By locator) {
+        try {
+            return getText(locator);
+        } catch (TimeoutException exception) {
+            return "";
+        }
+    }
+}

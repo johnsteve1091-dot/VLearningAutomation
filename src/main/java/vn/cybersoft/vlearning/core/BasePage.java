@@ -37,4 +37,14 @@ public abstract class BasePage {
     protected boolean isDisplayed(By locator) {
         return waitUntilVisible(locator).isDisplayed();
     }
+
+    protected void enterText(By locator, String text) {
+        WebElement input = waitUntilVisible(locator);
+        input.clear();
+        input.sendKeys(text);
+    }
+
+    protected String getText(By locator) {
+        return waitUntilVisible(locator).getText().trim();
+    }
 }
