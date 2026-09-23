@@ -37,6 +37,13 @@ public class RegisterPage extends BasePage {
     private static final By PHONE_ERROR =
             By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='soDT']/following-sibling::div[contains(@class,'errorMessage')][1]");
 
+    private static final By SUCCESS_POPUP =
+            By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Đăng kí thành công']");
+    private static final By EXISTING_ACCOUNT_POPUP =
+            By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Tài khoản đã tồn tại!']");
+    private static final By EXISTING_EMAIL_POPUP =
+            By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Email đã tồn tại!']");
+
     public RegisterPage(WebDriver driver) {
         super(driver);
     }
@@ -124,6 +131,18 @@ public class RegisterPage extends BasePage {
 
     public String getPhoneErrorMessage() {
         return getValidationMessage(PHONE_ERROR);
+    }
+
+    public boolean isSuccessfulRegistrationPopupDisplayed() {
+        return isControlDisplayed(SUCCESS_POPUP);
+    }
+
+    public boolean isExistingAccountPopupDisplayed() {
+        return isControlDisplayed(EXISTING_ACCOUNT_POPUP);
+    }
+
+    public boolean isExistingEmailPopupDisplayed() {
+        return isControlDisplayed(EXISTING_EMAIL_POPUP);
     }
 
     // Return absence on a visibility timeout so SoftAssert can check every field.
