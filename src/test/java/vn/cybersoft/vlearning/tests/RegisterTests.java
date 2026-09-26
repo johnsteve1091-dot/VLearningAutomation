@@ -1,5 +1,9 @@
 package vn.cybersoft.vlearning.tests;
 
+import io.qameta.allure.Description;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Story;
 import java.util.Locale;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -14,9 +18,13 @@ import vn.cybersoft.vlearning.pages.RegisterPage;
 
 
 
+@Epic("V Learning")
+@Feature("Register")
 public class RegisterTests extends BaseTest {
 
-    @Test
+    @Test(testName = "REG-001 - Register form displays all required controls", description = "REG-001 - Register form displays all required controls")
+    @Story("Register form UI")
+    @Description("Verify that the Register form displays the expected required controls including Account, Full Name, Password, Email, Phone and Register button.")
     public void registerFormShouldDisplayAllRequiredControls() {
         HomePage homePage = new HomePage(driver);
         LoginPage loginPage = homePage.goToLoginPage();
@@ -34,7 +42,9 @@ public class RegisterTests extends BaseTest {
         softly.assertAll();
     }
 
-    @Test
+    @Test(testName = "REG-002 - Empty Register submission displays required-field warnings", description = "REG-002 - Empty Register submission displays required-field warnings")
+    @Story("Required-field validation")
+    @Description("Submit the Register form with all required fields empty and verify every expected required-field validation message.")
     public void emptySubmissionShouldDisplayRequiredValidationMessages() {
         HomePage homePage = new HomePage(driver);
         LoginPage loginPage = homePage.goToLoginPage();
@@ -63,7 +73,9 @@ public class RegisterTests extends BaseTest {
         softly.assertAll();
     }
 
-    @Test
+    @Test(testName = "REG-003 - Invalid Register submission displays format warnings", description = "REG-003 - Invalid Register submission displays format warnings")
+    @Story("Format validation")
+    @Description("Submit deliberately invalid Account, Full Name, Password, Email and Phone values and verify the expected format and password-requirement validation messages.")
     public void invalidSubmissionShouldDisplayFormatValidationMessages() {
         HomePage homePage = new HomePage(driver);
         LoginPage loginPage = homePage.goToLoginPage();
@@ -108,7 +120,9 @@ public class RegisterTests extends BaseTest {
         softly.assertAll();
     }
 
-    @Test(priority = 4)
+    @Test(testName = "REG-005 - Registration succeeds with valid unique data", description = "REG-005 - Registration succeeds with valid unique data", priority = 4)
+    @Story("Successful registration")
+    @Description("Register using valid dynamically generated unique Account and Email values and verify the successful-registration popup.")
     public void registrationShouldSucceedWithValidUniqueData() {
         // A failed rerun must not leave an older pair marked as this run's success.
         RegisterSupport.clearCreatedRegistration();
@@ -131,7 +145,9 @@ public class RegisterTests extends BaseTest {
         RegisterSupport.saveCreatedRegistration(account, email);
     }
 
-    @Test(priority = 5)
+    @Test(testName = "REG-006 - Registration fails when Account already exists", description = "REG-006 - Registration fails when Account already exists", priority = 5)
+    @Story("Duplicate registration data")
+    @Description("Submit otherwise-valid registration data using an existing Account and verify the duplicate-account popup.")
     public void registrationShouldFailWhenAccountAlreadyExists() {
         String existingAccount = RegisterSupport.hasCreatedAccount()
                 ? RegisterSupport.getCreatedAccount() : RegisterInput.Existing.ACCOUNT;
@@ -158,7 +174,9 @@ public class RegisterTests extends BaseTest {
                         + "with a new unique email.");
     }
 
-    @Test(priority = 6)
+    @Test(testName = "REG-007 - Registration fails when Email already exists", description = "REG-007 - Registration fails when Email already exists", priority = 6)
+    @Story("Duplicate registration data")
+    @Description("Submit otherwise-valid registration data using an existing Email and verify the duplicate-email popup.")
     public void registrationShouldFailWhenEmailAlreadyExists() {
         String existingEmail = RegisterSupport.hasCreatedEmail()
                 ? RegisterSupport.getCreatedEmail() : RegisterInput.Existing.EMAIL;
@@ -185,7 +203,9 @@ public class RegisterTests extends BaseTest {
                         + "with a new unique account.");
     }
 
-    @Test(priority = 3)
+    @Test(testName = "REG-004 - Account longer than 16 characters displays maximum-length warning", description = "REG-004 - Account longer than 16 characters displays maximum-length warning", priority = 3)
+    @Story("Account boundary validation")
+    @Description("Submit an Account value containing exactly 17 characters and verify that the maximum 16-character validation warning is displayed.")
     public void accountLongerThan16CharactersShouldDisplayMaximumLengthWarning() {
         HomePage homePage = new HomePage(driver);
         LoginPage loginPage = homePage.goToLoginPage();
