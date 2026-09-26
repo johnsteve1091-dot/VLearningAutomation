@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.1
+# VLearningAutomation — v1.1.2
 
-Cybersoft V Learning Selenium capstone with **2 Login tests and 7 Register tests**,
+Cybersoft V Learning Selenium capstone with **5 Login tests and 7 Register tests**,
 plus Allure reporting, readable LOG/REG titles, descriptions, Epic/Feature/Story
 grouping, and a failure screenshot attached before Chrome closes.
 
@@ -104,10 +104,33 @@ Allure shows:
 - `BaseTest`: fresh Chrome per test, Homepage setup, EAGER page load, failure screenshot,
   and browser cleanup.
 - `BasePage` plus Home/Login/Register Page Objects: existing explicit waits and page actions.
-- `LoginTests`: two Login form visibility tests.
+- `LoginTests`: required controls, password masking, password copy protection, empty Login and randomized invalid Login.
+- `LoginSupport`: new synthetic Account/Password values for each invalid Login attempt.
 - `RegisterTests`: seven Register scenarios covering form controls, empty/invalid submission,
   the 17-character Account boundary, valid registration, duplicate Account, and duplicate Email.
 - `RegisterInput`, `RegisterMessage`, `RegisterSupport`: Register data, expected messages,
   generated unique values, and successful-registration reuse.
 
 Generated Gradle, test, and Allure output stays under `build/`, which is ignored by Git.
+
+## Login-only execution
+
+```powershell
+.\gradlew.bat clean test --tests "vn.cybersoft.vlearning.tests.LoginTests"
+```
+
+The existing Allure finalizer also runs for this filtered command. There are exactly
+five independent Login scenarios (LOG-001 through LOG-005); the old two separate
+visibility tests were replaced. No successful Login or real credentials are used.
+
+LOG-003 requires local, headed Chrome and an accessible desktop clipboard (the
+Windows Ctrl+A / Ctrl+C shortcuts). It temporarily sets a harmless sentinel and
+restores the previous clipboard contents. It observes the clipboard for one second
+after Ctrl+C; clipboard access errors fail the check rather than produce a pass.
+Avoid using the clipboard while this test runs.
+
+LOG-003 separately dispatches a cancelable `copy` event on the Password input and
+requires the page to cancel it without putting the password in the event payload.
+This checks the page handler used by Copy commands; it does not click Chrome's
+native context menu. A missing event cancellation is reported separately from an
+actual clipboard change, and is not by itself proof that plaintext was copied.
