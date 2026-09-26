@@ -1,9 +1,10 @@
 plugins {
     id 'java'
+    id 'io.qameta.allure' version '4.3.0'
 }
 
 group = 'vn.cybersoft.vlearning'
-version = '1.0.1'
+version = '1.1.1'
 
 repositories {
     mavenCentral()
@@ -17,9 +18,47 @@ java {
 
 dependencies {
     implementation 'org.seleniumhq.selenium:selenium-java:4.49.0'
+
     testImplementation 'org.testng:testng:7.12.0'
+
     testImplementation 'org.apache.logging.log4j:log4j-api:2.26.1'
     testRuntimeOnly 'org.apache.logging.log4j:log4j-core:2.26.1'
+    testRuntimeOnly 'org.apache.logging.log4j:log4j-slf4j2-impl:2.26.1'
+}
+
+allure {
+    // Allure 3 report runtime. The Gradle plugin provisions it automatically.
+    version = '3.14.3'
+
+    adapter {
+        // TestNG adapter used to write raw Allure results.
+        allureJavaVersion = '2.35.5'
+
+        // Not required for TestNG metadata, failures, or attachments.
+        // Keeping it disabled also avoids an unnecessary javaagent on Java 26.
+        aspectjWeaver.set(false)
+
+        // @Description is used directly in the test classes.
+        autoconfigureJavadocDescriptions.set(false)
+
+        // Gradle and IntelliJ TestNG runs use the same ignored output folder.
+        resultsDir.set(layout.buildDirectory.dir('allure-results'))
+
+        frameworks {
+            testng {
+                autoconfigureListeners.set(true)
+            }
+        }
+    }
+
+    report {
+        // Tests are run separately. This is important because known product
+        // defects intentionally fail tests, while the report must still build.
+        dependsOnTests.set(false)
+
+        // Produces an easy-to-open self-contained report in addition to allureServe.
+        singleFile = true
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -33,4 +72,24 @@ test {
 
     // The live website can change even when the Java sources have not.
     outputs.upToDateWhen { false }
+
+    // Finalizer tasks run even when tests fail. This keeps genuine red tests red
+    // while still generating the human-readable Allure report every run.
+    finalizedBy(tasks.named('allureReport'))
+}
+
+tasks.named('allureReport') {
+    group = 'allure'
+    description = 'Generate the Allure HTML report from existing test results.'
+    mustRunAfter(tasks.named('test'))
+}
+
+tasks.named('allureServe') {
+    group = 'allure'
+    description = 'Serve the current Allure report in a local browser.'
+}
+
+tasks.named('downloadAllure') {
+    group = 'allure'
+    description = 'Download/provision the Allure report runtime.'
 }
