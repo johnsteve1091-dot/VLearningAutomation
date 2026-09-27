@@ -47,4 +47,6 @@ public abstract class BasePage {
     protected String getText(By locator) {
         return waitUntilVisible(locator).getText().trim();
     }
+
+
 }

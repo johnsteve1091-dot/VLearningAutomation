@@ -1,8 +1,13 @@
-# VLearningAutomation — v1.1.2
+# VLearningAutomation — v1.1.3
 
-Cybersoft V Learning Selenium capstone with **5 Login tests and 7 Register tests**,
+Cybersoft V Learning Selenium capstone with **4 Login tests and 14 Register tests (18 active test methods)**,
 plus Allure reporting, readable LOG/REG titles, descriptions, Epic/Feature/Story
 grouping, and a failure screenshot attached before Chrome closes.
+
+Source-count note: the requested target was 5 Login + 14 Register = 19 tests, but
+current GitHub `main` (`1e3317acfdef3ad2a3a7fbf89c6ef542f0bd511c`) contains only four
+Login tests. `passwordShouldNotBeCopyable` is absent. This Register-only revision
+preserves Login source and LOG IDs unchanged, so the actual total is 18.
 
 Stack: **Java 26**, Gradle Wrapper **9.7.1**, Selenium **4.49.0**,
 TestNG **7.12.0**, Log4j **2.26.1**, Chrome.
@@ -104,12 +109,15 @@ Allure shows:
 - `BaseTest`: fresh Chrome per test, Homepage setup, EAGER page load, failure screenshot,
   and browser cleanup.
 - `BasePage` plus Home/Login/Register Page Objects: existing explicit waits and page actions.
-- `LoginTests`: required controls, password masking, password copy protection, empty Login and randomized invalid Login.
+- `LoginTests`: required controls, password masking, empty Login and randomized invalid Login (unchanged from main).
 - `LoginSupport`: new synthetic Account/Password values for each invalid Login attempt.
-- `RegisterTests`: seven Register scenarios covering form controls, empty/invalid submission,
-  the 17-character Account boundary, valid registration, duplicate Account, and duplicate Email.
+- `RegisterTests`: 13 authoritative matrix scenarios (REG-001 through REG-013), plus
+  REG-SMOKE-001, the preserved combined invalid-validation regression test.
+  Compound Account, Name, Password, Email and Phone cases remain one test per matrix ID.
+  REG-002 successful registration runs last by design, with priority 99.
 - `RegisterInput`, `RegisterMessage`, `RegisterSupport`: Register data, expected messages,
-  generated unique values, and successful-registration reuse.
+  generated unique values, and temporary created-registration state. Duplicate scenarios
+  use manually configured `RegisterInput.Existing` values independently of REG-002.
 
 Generated Gradle, test, and Allure output stays under `build/`, which is ignored by Git.
 
@@ -120,17 +128,30 @@ Generated Gradle, test, and Allure output stays under `build/`, which is ignored
 ```
 
 The existing Allure finalizer also runs for this filtered command. There are exactly
-five independent Login scenarios (LOG-001 through LOG-005); the old two separate
+four independent Login scenarios (LOG-001 through LOG-004); the old two separate
 visibility tests were replaced. No successful Login or real credentials are used.
 
-LOG-003 requires local, headed Chrome and an accessible desktop clipboard (the
-Windows Ctrl+A / Ctrl+C shortcuts). It temporarily sets a harmless sentinel and
-restores the previous clipboard contents. It observes the clipboard for one second
-after Ctrl+C; clipboard access errors fail the check rather than produce a pass.
-Avoid using the clipboard while this test runs.
+The current LoginPage retains its clipboard/copy-event helpers, but no active Login
+`@Test` method invokes the password-copy check in the inspected main revision.
+Restoring that fifth Login scenario requires a separate Login change.
 
-LOG-003 separately dispatches a cancelable `copy` event on the Password input and
-requires the page to cancel it without putting the password in the event payload.
-This checks the page handler used by Copy commands; it does not click Chrome's
-native context menu. A missing event cancellation is reported separately from an
-actual clipboard change, and is not by itself proof that plaintext was copied.
+## Register-only execution
+
+Before duplicate tests run, supply known-existing database values for
+`RegisterInput.Existing.ACCOUNT` and `RegisterInput.Existing.EMAIL` in
+`src/test/java/vn/cybersoft/vlearning/data/register/RegisterInput.java`.
+Unfilled placeholders deliberately fail REG-005 and REG-010. These tests run before
+REG-002 and do not use the final success test as their prerequisite.
+
+```powershell
+.\gradlew.bat clean test --tests "vn.cybersoft.vlearning.tests.RegisterTests"
+```
+
+Execution order: REG-001, REG-003, REG-SMOKE-001, REG-004 through REG-013, then REG-002.
+There are no method dependencies. REG-012/013 do not submit registration.
+
+Valid Account-boundary, Password and Email checks use an unrelated invalid field to
+block registration. REG-011 uses valid generated Account/Email for invalid Phone
+variations, then switches Account to the invalid short value for its valid-Phone check.
+Known warning-message defects remain failed assertions. See `CHANGE_REPORT.md` for
+coverage, source preservation and verification details.
