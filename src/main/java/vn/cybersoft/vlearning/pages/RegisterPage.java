@@ -1,15 +1,14 @@
 package vn.cybersoft.vlearning.pages;
 
-import org.openqa.selenium.By;
-import org.openqa.selenium.ElementClickInterceptedException;
-import org.openqa.selenium.StaleElementReferenceException;
-import org.openqa.selenium.TimeoutException;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
+import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
 import vn.cybersoft.vlearning.core.BasePage;
 
 public class RegisterPage extends BasePage {
+
+    private static final By REGISTER_TITLE =
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//h2[normalize-space()='ĐĂNG KÝ']");
 
     private static final By ACCOUNT_INPUT =
             By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='taiKhoan']");
@@ -22,30 +21,38 @@ public class RegisterPage extends BasePage {
     private static final By PHONE_INPUT =
             By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='soDT']");
     private static final By GROUP_DROPDOWN =
-            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//select[contains(@class,'maNhom')]");
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//select[@name='maNhom']");
     private static final By REGISTER_BUTTON =
             By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//button[@type='submit' and normalize-space()='Đăng ký']");
 
     private static final By ACCOUNT_ERROR =
-            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='taiKhoan']/following-sibling::div[contains(@class,'errorMessage')][1]");
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='taiKhoan']/following-sibling::div[1][contains(@class,'errorMessage')]");
+
     private static final By FULL_NAME_ERROR =
-            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='hoTen']/following-sibling::div[contains(@class,'errorMessage')][1]");
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='hoTen']/following-sibling::div[1][contains(@class,'errorMessage')]");
+
     private static final By PASSWORD_ERROR =
-            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='matKhau']/following-sibling::div[contains(@class,'errorMessage')][1]");
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='matKhau']/following-sibling::div[1][contains(@class,'errorMessage')]");
+
     private static final By EMAIL_ERROR =
-            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='email']/following-sibling::div[contains(@class,'errorMessage')][1]");
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='email']/following-sibling::div[1][contains(@class,'errorMessage')]");
+
     private static final By PHONE_ERROR =
-            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='soDT']/following-sibling::div[contains(@class,'errorMessage')][1]");
+            By.xpath("//form[.//h2[normalize-space()='ĐĂNG KÝ']]//input[@name='soDT']/following-sibling::div[1][contains(@class,'errorMessage')]");
 
     private static final By SUCCESS_POPUP =
             By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Đăng kí thành công']");
     private static final By EXISTING_ACCOUNT_POPUP =
             By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Tài khoản đã tồn tại!']");
     private static final By EXISTING_EMAIL_POPUP =
-            By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Email đã tồn tại!']");
+            By.xpath("//div[contains(@class,'swal-modal') and @role='dialog'][.//div[contains(@class,'swal-title') and normalize-space()='Email đã tồn tại!']]");
 
     public RegisterPage(WebDriver driver) {
         super(driver);
+    }
+
+    public boolean isRegisterTitleDisplayed() {
+        return isControlDisplayed(REGISTER_TITLE);
     }
 
     public boolean isAccountInputDisplayed() {
@@ -96,6 +103,23 @@ public class RegisterPage extends BasePage {
         enterText(PHONE_INPUT, phone);
     }
 
+    public void selectGroup(String visibleText) {
+        new Select(waitUntilClickable(GROUP_DROPDOWN)).selectByVisibleText(visibleText);
+    }
+
+    public String getSelectedGroup() {
+        return new Select(waitUntilVisible(GROUP_DROPDOWN)).getFirstSelectedOption().getText().trim();
+    }
+
+    public boolean isGroupDropdownNativeSelect() {
+        return "select".equalsIgnoreCase(waitUntilVisible(GROUP_DROPDOWN).getTagName());
+    }
+
+    public boolean hasGroupOption(String visibleText) {
+        return new Select(waitUntilVisible(GROUP_DROPDOWN)).getOptions().stream()
+                .anyMatch(option -> option.getText().trim().equals(visibleText));
+    }
+
     public void clickRegister() {
         // A visible button can still be covered while the panel is animating.
         getWait().until(currentDriver -> {
@@ -133,6 +157,27 @@ public class RegisterPage extends BasePage {
         return getValidationMessage(PHONE_ERROR);
     }
 
+    // Call these only after a known validation warning confirms form validation.
+    public boolean isAccountErrorDisplayedNow() {
+        return isErrorDisplayedNow(ACCOUNT_ERROR);
+    }
+
+    public boolean isPasswordErrorDisplayedNow() {
+        return isErrorDisplayedNow(PASSWORD_ERROR);
+    }
+
+    public boolean isEmailErrorDisplayedNow() {
+        return isErrorDisplayedNow(EMAIL_ERROR);
+    }
+
+    public boolean isPhoneErrorDisplayedNow() {
+        return isErrorDisplayedNow(PHONE_ERROR);
+    }
+
+    private boolean isErrorDisplayedNow(By locator) {
+        return driver.findElements(locator).stream().anyMatch(WebElement::isDisplayed);
+    }
+
     public boolean isSuccessfulRegistrationPopupDisplayed() {
         return isControlDisplayed(SUCCESS_POPUP);
     }
@@ -161,5 +206,25 @@ public class RegisterPage extends BasePage {
         } catch (TimeoutException exception) {
             return "";
         }
+    }
+    public void clearRegisterForm() {
+        clearField(ACCOUNT_INPUT);
+        clearField(FULL_NAME_INPUT);
+        clearField(PASSWORD_INPUT);
+        clearField(EMAIL_INPUT);
+        clearField(PHONE_INPUT);
+    }
+
+    private void clearField(By locator) {
+        WebElement input = waitUntilVisible(locator);
+
+        input.click();
+        input.sendKeys(Keys.CONTROL, "a");
+        input.sendKeys(Keys.BACK_SPACE);
+
+        getWait().until(driver ->
+                input.getDomProperty("value") == null
+                        || input.getDomProperty("value").isEmpty()
+        );
     }
 }

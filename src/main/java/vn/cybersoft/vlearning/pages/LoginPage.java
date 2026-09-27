@@ -173,4 +173,14 @@ public class LoginPage extends BasePage {
         click(REGISTER_BUTTON);
         return new RegisterPage(driver);
     }
+
+    public boolean waitUntilLoggedIn() {
+        try {
+            return getWait().until(currentDriver ->
+                    !currentDriver.getCurrentUrl().contains("/login")
+            );
+        } catch (TimeoutException loginDidNotComplete) {
+            return false;
+        }
+    }
 }

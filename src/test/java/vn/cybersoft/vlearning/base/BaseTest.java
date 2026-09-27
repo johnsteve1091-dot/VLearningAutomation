@@ -4,10 +4,7 @@ import io.qameta.allure.Allure;
 import java.io.ByteArrayInputStream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.PageLoadStrategy;
-import org.openqa.selenium.TakesScreenshot;
-import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.testng.ITestResult;
@@ -40,12 +37,20 @@ public abstract class BaseTest {
                         && driver instanceof TakesScreenshot screenshotDriver) {
                     try {
                         byte[] screenshot = screenshotDriver.getScreenshotAs(OutputType.BYTES);
-                        Allure.addAttachment("Failure Screenshot", "image/png",
-                                new ByteArrayInputStream(screenshot), ".png");
+                        Allure.addAttachment(
+                                "Failure Screenshot",
+                                "image/png",
+                                new ByteArrayInputStream(screenshot),
+                                ".png"
+                        );
                     } catch (RuntimeException screenshotError) {
                         LOGGER.warn("Could not attach failure screenshot", screenshotError);
                     }
                 }
+
+                // Clear authentication/session state after evidence is captured.
+                clearBrowserSession();
+
             } finally {
                 try {
                     LOGGER.info("Closing Chrome");
@@ -54,6 +59,24 @@ public abstract class BaseTest {
                     driver = null;
                 }
             }
+        }
+    }
+    private void clearBrowserSession() {
+        try {
+            if (driver instanceof JavascriptExecutor js) {
+                js.executeScript("""
+                    window.localStorage.clear();
+                    window.sessionStorage.clear();
+                    """);
+            }
+        } catch (RuntimeException storageError) {
+            LOGGER.warn("Could not clear browser storage", storageError);
+        }
+
+        try {
+            driver.manage().deleteAllCookies();
+        } catch (RuntimeException cookieError) {
+            LOGGER.warn("Could not clear browser cookies", cookieError);
         }
     }
 }
