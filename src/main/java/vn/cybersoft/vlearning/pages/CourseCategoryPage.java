@@ -1,0 +1,112 @@
+package vn.cybersoft.vlearning.pages;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import vn.cybersoft.vlearning.core.BasePage;
+
+public class CourseCategoryPage extends BasePage {
+
+    private static final By CATEGORY_NAME =
+            By.xpath(
+                    "//section"
+                            + "//div[contains(@class,'listCourseCategory')]"
+                            + "//div[contains(@class,'courseCateName')]"
+            );
+
+    private static final By COURSE_CARDS =
+            By.xpath(
+                    "//section"
+                            + "//div[contains(@class,'listCourseCategory')]"
+                            + "//div[contains(@class,'cardGlobalRes')]"
+                            + "//a[contains(@class,'cardGlobal')]"
+            );
+
+    private static final By COURSE_NAME =
+            By.xpath(
+                    ".//div[contains(@class,'cardBodyGlobal')]//h6"
+            );
+
+    private static final By SUB_CARD =
+            By.xpath(
+                    ".//div[contains(@class,'subCard')]"
+            );
+
+    public CourseCategoryPage(WebDriver driver) {
+        super(driver);
+    }
+
+    public CourseCategoryPage open(
+            String categoryUrl
+    ) {
+
+        driver.get(categoryUrl);
+
+        waitUntilVisible(CATEGORY_NAME);
+
+        return this;
+    }
+
+    public String getCategoryName() {
+
+        return getText(CATEGORY_NAME);
+    }
+
+    public List<CourseCardSnapshot> captureCourseCards() {
+
+        List<WebElement> courseElements =
+                getWait().until(driver -> {
+
+                    List<WebElement> elements =
+                            driver.findElements(COURSE_CARDS);
+
+                    return elements.isEmpty()
+                            ? null
+                            : elements;
+                });
+
+        List<CourseCardSnapshot> courses =
+                new ArrayList<>();
+
+        for (int index = 0;
+             index < courseElements.size();
+             index++) {
+
+            WebElement courseElement =
+                    courseElements.get(index);
+
+            String href =
+                    courseElement.getAttribute("href");
+
+            String name = "";
+
+            List<WebElement> nameElements =
+                    courseElement.findElements(COURSE_NAME);
+
+            if (!nameElements.isEmpty()) {
+
+                name = nameElements.getFirst()
+                        .getText()
+                        .trim();
+            }
+
+            boolean hasSubCard =
+                    !courseElement.findElements(SUB_CARD)
+                            .isEmpty();
+
+            courses.add(
+                    new CourseCardSnapshot(
+                            name,
+                            href,
+                            index + 1,
+                            hasSubCard
+                    )
+            );
+        }
+
+        return List.copyOf(courses);
+    }
+}
