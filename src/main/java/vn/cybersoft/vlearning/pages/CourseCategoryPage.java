@@ -75,34 +75,10 @@ public class CourseCategoryPage extends BasePage {
              index < courseElements.size();
              index++) {
 
-            WebElement courseElement =
-                    courseElements.get(index);
-
-            String href =
-                    courseElement.getAttribute("href");
-
-            String name = "";
-
-            List<WebElement> nameElements =
-                    courseElement.findElements(COURSE_NAME);
-
-            if (!nameElements.isEmpty()) {
-
-                name = nameElements.getFirst()
-                        .getText()
-                        .trim();
-            }
-
-            boolean hasSubCard =
-                    !courseElement.findElements(SUB_CARD)
-                            .isEmpty();
-
             courses.add(
-                    new CourseCardSnapshot(
-                            name,
-                            href,
-                            index + 1,
-                            hasSubCard
+                    CourseCardDomReader.capture(
+                            courseElements.get(index),
+                            index + 1
                     )
             );
         }
