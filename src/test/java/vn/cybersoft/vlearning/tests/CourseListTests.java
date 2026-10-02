@@ -26,7 +26,7 @@ import vn.cybersoft.vlearning.pages.HomePage;
 import vn.cybersoft.vlearning.data.CourseList.CourseSubCardSupport;
 import vn.cybersoft.vlearning.pages.CourseCardSnapshot;
 import vn.cybersoft.vlearning.pages.CourseCategoryPage;
-
+import vn.cybersoft.vlearning.data.CourseList.CourseSubCardContentSupport;
 
 @Epic("V Learning")
 @Feature("Course List")
@@ -488,6 +488,396 @@ public class CourseListTests extends BaseTest {
                         + missingSubCards.size()
                         + " Danh mục course card(s) are missing subCard. "
                         + "See Allure summary."
+        );
+    }
+    @Test(
+            groups = {"course-integrity-tc3"},
+            testName = "COURSE-INTEGRITY-003A - Homepage SubCard Content Integrity",
+            description = "COURSE-INTEGRITY-003A - Homepage SubCard Content Integrity"
+    )
+    @Story("Homepage subCard information matches its Course card")
+    @Description(
+            "Inspect every Homepage Course card and validate the complete subCard "
+                    + "content contract. Compare Course name, instructor name, hours, "
+                    + "weeks and level with the parent card. Also verify that the "
+                    + "subCard contains an instructor avatar, non-blank description "
+                    + "and XEM CHI TIẾT button. No hover interaction is performed."
+    )
+    public void everyHomepageSubCardShouldContainCorrectCourseInformation() {
+
+        List<CourseSubCardContentSupport.CardProblem> problems =
+                new ArrayList<>();
+
+        int fieldFailures = 0;
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-003A | Starting Homepage subCard content sweep"
+        );
+
+        HomePage homePage =
+                new HomePage(driver);
+
+        List<CourseCardSnapshot> courses =
+                homePage.captureHomepageCourseCards();
+
+        for (CourseCardSnapshot course
+                : courses) {
+
+            List<CourseSubCardContentSupport.FieldIssue> issues =
+                    CourseSubCardContentSupport.inspect(
+                            course
+                    );
+
+            if (!issues.isEmpty()) {
+
+                fieldFailures +=
+                        issues.size();
+
+                CourseSubCardContentSupport.CardProblem problem =
+                        new CourseSubCardContentSupport.CardProblem(
+                                "Homepage",
+                                driver.getCurrentUrl(),
+                                course.cardIndex(),
+                                course.name(),
+                                course.href(),
+                                issues
+                        );
+
+                problems.add(problem);
+
+                LOGGER.warn(
+                        "SUBCARD CONTENT FAIL | surface=Homepage | card={} | name=\"{}\" | fields={}",
+                        course.cardIndex(),
+                        course.name(),
+                        problem.fields()
+                );
+            }
+        }
+
+        String summary =
+                CourseSubCardContentSupport.buildDetailedSummary(
+                        "COURSE-INTEGRITY-003A",
+                        "Homepage",
+                        "Pages checked",
+                        1,
+                        courses.size(),
+                        problems
+                );
+
+        Allure.addAttachment(
+                "COURSE-INTEGRITY-003A Homepage subCard content summary",
+                "text/plain",
+                summary,
+                ".txt"
+        );
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-003A COMPLETE | checked={} | problemCards={} | fieldFailures={}",
+                courses.size(),
+                problems.size(),
+                fieldFailures
+        );
+
+        Assert.assertTrue(
+                problems.isEmpty(),
+                "COURSE-INTEGRITY-003A failed: "
+                        + problems.size()
+                        + " Homepage course card(s) contain subCard content problems "
+                        + "across "
+                        + fieldFailures
+                        + " field(s). See Allure summary."
+        );
+    }
+    @Test(
+            groups = {"course-integrity-tc3"},
+            testName = "COURSE-INTEGRITY-003B - Khóa học SubCard Content Integrity",
+            description = "COURSE-INTEGRITY-003B - Khóa học SubCard Content Integrity"
+    )
+    @Story("Khóa học subCard information matches its Course card")
+    @Description(
+            "Traverse every Khóa học pagination page and validate the complete "
+                    + "subCard content contract for every rendered Course card. "
+                    + "Compare Course name, instructor name, hours, weeks and level "
+                    + "with the parent card. Also verify instructor avatar, description "
+                    + "and XEM CHI TIẾT button. No hover interaction is performed."
+    )
+    public void everyCourseListSubCardShouldContainCorrectCourseInformation() {
+
+        List<CourseSubCardContentSupport.CardProblem> problems =
+                new ArrayList<>();
+
+        Set<Integer> visitedPages =
+                new HashSet<>();
+
+        Set<List<String>> visitedDatasets =
+                new HashSet<>();
+
+        int totalCardsChecked = 0;
+        int fieldFailures = 0;
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-003B | Starting Khóa học subCard content sweep"
+        );
+
+        CourseListPage catalog =
+                new HomePage(driver)
+                        .goToCourseListPage();
+
+        CatalogPage page =
+                catalog.captureCurrentPage();
+
+        while (page != null) {
+
+            if (!visitedPages.add(page.number())) {
+
+                throw new IllegalStateException(
+                        "Pagination revisited page "
+                                + page.number()
+                );
+            }
+
+            if (!visitedDatasets.add(page.hrefs())) {
+
+                throw new IllegalStateException(
+                        "Pagination returned duplicate dataset at page "
+                                + page.number()
+                );
+            }
+
+            int problemCardsOnThisPage = 0;
+
+            for (CourseCandidate course
+                    : page.courses()) {
+
+                totalCardsChecked++;
+
+                List<CourseSubCardContentSupport.FieldIssue> issues =
+                        CourseSubCardContentSupport.inspect(
+                                course.snapshot()
+                        );
+
+                if (!issues.isEmpty()) {
+
+                    problemCardsOnThisPage++;
+                    fieldFailures +=
+                            issues.size();
+
+                    CourseSubCardContentSupport.CardProblem problem =
+                            new CourseSubCardContentSupport.CardProblem(
+                                    "Khóa học",
+                                    "Page " + page.number(),
+                                    course.cardIndex(),
+                                    course.name(),
+                                    course.href(),
+                                    issues
+                            );
+
+                    problems.add(problem);
+
+                    LOGGER.warn(
+                            "SUBCARD CONTENT FAIL | surface=Khóa học | page={} | card={} | name=\"{}\" | fields={}",
+                            page.number(),
+                            course.cardIndex(),
+                            course.name(),
+                            problem.fields()
+                    );
+                }
+            }
+
+            LOGGER.info(
+                    "PAGE {} | cards={} | checked={} | problemCardsThisPage={} | totalProblemCards={} | fieldFailures={}",
+                    page.number(),
+                    page.courses().size(),
+                    totalCardsChecked,
+                    problemCardsOnThisPage,
+                    problems.size(),
+                    fieldFailures
+            );
+
+            page =
+                    catalog.goToNextPage(page);
+        }
+
+        String summary =
+                CourseSubCardContentSupport.buildDetailedSummary(
+                        "COURSE-INTEGRITY-003B",
+                        "Khóa học",
+                        "Pagination pages checked",
+                        visitedPages.size(),
+                        totalCardsChecked,
+                        problems
+                );
+
+        Allure.addAttachment(
+                "COURSE-INTEGRITY-003B Khóa học subCard content summary",
+                "text/plain",
+                summary,
+                ".txt"
+        );
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-003B COMPLETE | pages={} | checked={} | problemCards={} | fieldFailures={}",
+                visitedPages.size(),
+                totalCardsChecked,
+                problems.size(),
+                fieldFailures
+        );
+
+        Assert.assertTrue(
+                problems.isEmpty(),
+                "COURSE-INTEGRITY-003B failed: "
+                        + problems.size()
+                        + " Khóa học course card(s) contain subCard content problems "
+                        + "across "
+                        + fieldFailures
+                        + " field(s). See Allure summary."
+        );
+    }
+    @Test(
+            groups = {"course-integrity-tc3"},
+            testName = "COURSE-INTEGRITY-003C - Danh mục SubCard Content Integrity",
+            description = "COURSE-INTEGRITY-003C - Danh mục SubCard Content Integrity"
+    )
+    @Story("Danh mục subCard information matches its Course card")
+    @Description(
+            "Discover the real Danh mục Course category links from the Homepage, "
+                    + "visit every category and validate the complete subCard content "
+                    + "contract for every rendered Course card. Compare Course name, "
+                    + "instructor name, hours, weeks and level with the parent card. "
+                    + "Also verify instructor avatar, description and XEM CHI TIẾT button. "
+                    + "No hover interaction is performed."
+    )
+    public void everyCategorySubCardShouldContainCorrectCourseInformation() {
+
+        List<CourseSubCardContentSupport.CardProblem> problems =
+                new ArrayList<>();
+
+        HomePage homePage =
+                new HomePage(driver);
+
+        List<String> categoryUrls =
+                homePage.getCourseCategoryUrls();
+
+        if (categoryUrls.isEmpty()) {
+
+            throw new IllegalStateException(
+                    "No /danhmuckhoahoc/ category links were discovered on the Homepage."
+            );
+        }
+
+        int categoriesChecked = 0;
+        int totalCardsChecked = 0;
+        int fieldFailures = 0;
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-003C | Starting Danh mục subCard content sweep | categories={}",
+                categoryUrls.size()
+        );
+
+        CourseCategoryPage categoryPage =
+                new CourseCategoryPage(driver);
+
+        for (String categoryUrl
+                : categoryUrls) {
+
+            categoryPage.open(
+                    categoryUrl
+            );
+
+            String categoryName =
+                    categoryPage.getCategoryName();
+
+            List<CourseCardSnapshot> courses =
+                    categoryPage.captureCourseCards();
+
+            categoriesChecked++;
+
+            int problemCardsInThisCategory = 0;
+
+            for (CourseCardSnapshot course
+                    : courses) {
+
+                totalCardsChecked++;
+
+                List<CourseSubCardContentSupport.FieldIssue> issues =
+                        CourseSubCardContentSupport.inspect(
+                                course
+                        );
+
+                if (!issues.isEmpty()) {
+
+                    problemCardsInThisCategory++;
+                    fieldFailures +=
+                            issues.size();
+
+                    CourseSubCardContentSupport.CardProblem problem =
+                            new CourseSubCardContentSupport.CardProblem(
+                                    "Danh mục",
+                                    categoryName
+                                            + " | "
+                                            + categoryUrl,
+                                    course.cardIndex(),
+                                    course.name(),
+                                    course.href(),
+                                    issues
+                            );
+
+                    problems.add(problem);
+
+                    LOGGER.warn(
+                            "SUBCARD CONTENT FAIL | category=\"{}\" | card={} | name=\"{}\" | fields={}",
+                            categoryName,
+                            course.cardIndex(),
+                            course.name(),
+                            problem.fields()
+                    );
+                }
+            }
+
+            LOGGER.info(
+                    "CATEGORY \"{}\" | cards={} | checked={} | problemCardsThisCategory={} | totalProblemCards={} | fieldFailures={}",
+                    categoryName,
+                    courses.size(),
+                    totalCardsChecked,
+                    problemCardsInThisCategory,
+                    problems.size(),
+                    fieldFailures
+            );
+        }
+
+        String summary =
+                CourseSubCardContentSupport.buildDetailedSummary(
+                        "COURSE-INTEGRITY-003C",
+                        "Danh mục",
+                        "Categories checked",
+                        categoriesChecked,
+                        totalCardsChecked,
+                        problems
+                );
+
+        Allure.addAttachment(
+                "COURSE-INTEGRITY-003C Danh mục subCard content summary",
+                "text/plain",
+                summary,
+                ".txt"
+        );
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-003C COMPLETE | categories={} | checked={} | problemCards={} | fieldFailures={}",
+                categoriesChecked,
+                totalCardsChecked,
+                problems.size(),
+                fieldFailures
+        );
+
+        Assert.assertTrue(
+                problems.isEmpty(),
+                "COURSE-INTEGRITY-003C failed: "
+                        + problems.size()
+                        + " Danh mục course card(s) contain subCard content problems "
+                        + "across "
+                        + fieldFailures
+                        + " field(s). See Allure summary."
         );
     }
 }

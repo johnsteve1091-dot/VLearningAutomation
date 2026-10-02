@@ -61,7 +61,8 @@ public class CourseListPage extends BasePage {
             String href,
             int page,
             int cardIndex,
-            boolean hasSubCard
+            boolean hasSubCard,
+            CourseCardSnapshot snapshot
     ) {
     }
 
@@ -120,14 +121,24 @@ public class CourseListPage extends BasePage {
                     !courseElement.findElements(SUB_CARD)
                             .isEmpty();
 
+            CourseCardSnapshot snapshot =
+                    CourseCardDomReader.capture(
+                            courseElement,
+                            index + 1
+                    );
+
             CourseCandidate course =
                     new CourseCandidate(
-                            name,
-                            href,
+                            snapshot.name(),
+                            snapshot.href(),
                             pageNumber,
-                            index + 1,
-                            hasSubCard
+                            snapshot.cardIndex(),
+                            snapshot.hasSubCard(),
+                            snapshot
                     );
+
+            courses.add(course);
+            hrefs.add(snapshot.href());
 
             courses.add(course);
             hrefs.add(href);
@@ -224,4 +235,5 @@ public class CourseListPage extends BasePage {
 
         return hrefs;
     }
+
 }
