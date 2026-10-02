@@ -102,25 +102,6 @@ public class CourseListPage extends BasePage {
             WebElement courseElement =
                     courseElements.get(index);
 
-            String href =
-                    courseElement.getAttribute("href");
-
-            String name = "";
-
-            List<WebElement> nameElements =
-                    courseElement.findElements(COURSE_NAME);
-
-            if (!nameElements.isEmpty()) {
-
-                name = nameElements.getFirst()
-                        .getText()
-                        .trim();
-            }
-
-            boolean hasSubCard =
-                    !courseElement.findElements(SUB_CARD)
-                            .isEmpty();
-
             CourseCardSnapshot snapshot =
                     CourseCardDomReader.capture(
                             courseElement,
@@ -139,9 +120,6 @@ public class CourseListPage extends BasePage {
 
             courses.add(course);
             hrefs.add(snapshot.href());
-
-            courses.add(course);
-            hrefs.add(href);
         }
 
         return new CatalogPage(
