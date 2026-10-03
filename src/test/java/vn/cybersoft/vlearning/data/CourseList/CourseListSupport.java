@@ -3,8 +3,6 @@ package vn.cybersoft.vlearning.data.CourseList;
 import java.net.URI;
 import java.util.List;
 
-import vn.cybersoft.vlearning.pages.CourseListPage.CourseCandidate;
-
 public final class CourseListSupport {
 
     private static final String COURSE_DETAIL_PATH_PREFIX =
@@ -13,36 +11,51 @@ public final class CourseListSupport {
     private CourseListSupport() {
     }
 
-    public record MissingCourseId(
-            CourseCandidate course,
+    public record CourseUrlProblem(
+            String surface,
+            String location,
+            int cardIndex,
+            String courseName,
+            String href,
             String reason
     ) {
 
         public String describe() {
-            return "Name: " + course.name()
-                    + "\nHref: " + course.href()
-                    + "\nSource page: " + course.page()
-                    + "\nCard position: " + course.cardIndex()
+
+            return "Surface: " + surface
+                    + "\nLocation: " + location
+                    + "\nCard position: " + cardIndex
+                    + "\nCourse name: " + display(courseName)
+                    + "\nHref: " + display(href)
                     + "\nReason: " + reason;
         }
     }
 
-    public static String findCourseUrlProblem(String href) {
+    public static String findCourseUrlProblem(
+            String href
+    ) {
 
         if (href == null || href.isBlank()) {
             return "Course href is null or blank.";
         }
 
         try {
-            URI uri = URI.create(href.trim());
 
-            String path = uri.getRawPath();
+            URI uri =
+                    URI.create(
+                            href.trim()
+                    );
+
+            String path =
+                    uri.getRawPath();
 
             if (path == null || path.isBlank()) {
                 return "Course href has no URL path.";
             }
 
-            if (!path.startsWith(COURSE_DETAIL_PATH_PREFIX)) {
+            if (!path.startsWith(
+                    COURSE_DETAIL_PATH_PREFIX
+            )) {
                 return "Course href does not target /chitiet/.";
             }
 
@@ -58,39 +71,64 @@ public final class CourseListSupport {
             return null;
 
         } catch (IllegalArgumentException invalidUrl) {
+
             return "Course href is not a valid URI.";
         }
     }
 
     public static String buildDetailedSummary(
-            int pagesChecked,
+            String testId,
+            String surface,
+            String coverageLabel,
+            int coverageCount,
             int totalCardsChecked,
-            List<MissingCourseId> missingIds
+            List<CourseUrlProblem> problems
     ) {
 
         StringBuilder report =
-                new StringBuilder(
-                        "COURSE-LIST-001 - Course Detail URL ID Integrity\n"
-                )
-                        .append("Pagination pages checked: ")
-                        .append(pagesChecked)
+                new StringBuilder(testId)
+                        .append(
+                                " - Course Detail URL ID Integrity\n"
+                        )
+                        .append("Surface: ")
+                        .append(surface)
+                        .append('\n')
+                        .append(coverageLabel)
+                        .append(": ")
+                        .append(coverageCount)
                         .append('\n')
                         .append("Course cards checked: ")
                         .append(totalCardsChecked)
                         .append('\n')
                         .append("Missing/invalid Course Detail IDs: ")
-                        .append(missingIds.size())
+                        .append(problems.size())
                         .append('\n');
 
-        for (int index = 0; index < missingIds.size(); index++) {
+        for (int index = 0;
+             index < problems.size();
+             index++) {
 
             report.append("\nFailure ")
                     .append(index + 1)
                     .append('\n')
-                    .append(missingIds.get(index).describe())
+                    .append(
+                            problems
+                                    .get(index)
+                                    .describe()
+                    )
                     .append('\n');
         }
 
         return report.toString();
+    }
+
+    private static String display(
+            String value
+    ) {
+
+        return value == null
+                || value.isBlank()
+                ? "<missing>"
+                : value;
     }
 }
