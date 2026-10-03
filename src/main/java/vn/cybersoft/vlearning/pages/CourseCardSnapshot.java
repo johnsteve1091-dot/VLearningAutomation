@@ -15,7 +15,22 @@ public record CourseCardSnapshot(
             String instructorAvatarSrc,
             String hours,
             String weeks,
-            String level
+            String level,
+
+            // TC4 - main visible Course card
+            String courseImageSrc,
+            boolean courseImageDisplayed,
+            int courseImageNaturalWidth,
+
+            boolean instructorAvatarDisplayed,
+            int instructorAvatarNaturalWidth,
+
+            String originalPrice,
+            String discountedPrice,
+            String originalPriceDecoration,
+
+            String ratingScore,
+            String reviewCount
     ) {
     }
 

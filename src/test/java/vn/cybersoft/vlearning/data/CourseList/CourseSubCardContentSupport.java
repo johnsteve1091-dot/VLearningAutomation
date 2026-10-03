@@ -16,7 +16,59 @@ public final class CourseSubCardContentSupport {
 
     private CourseSubCardContentSupport() {
     }
+    private static void compareWhenParentProvidesValue(
+            String field,
+            String parentValue,
+            String subCardValue,
+            List<FieldIssue> issues
+    ) {
 
+        /*
+         * Not every Course-card surface exposes Hours / Weeks / Level.
+         *
+         * When the parent does expose the field, the subCard must expose
+         * the same value.
+         *
+         * When the parent does not expose it, there is no equivalent
+         * parent value to compare against.
+         */
+        if (isBlank(
+                parentValue
+        )) {
+
+            return;
+        }
+
+        if (isBlank(
+                subCardValue
+        )) {
+
+            issues.add(
+                    new FieldIssue(
+                            field,
+                            parentValue,
+                            subCardValue,
+                            "Parent Course card exposes this field, but subCard value is missing."
+                    )
+            );
+
+            return;
+        }
+
+        if (!parentValue.equals(
+                subCardValue
+        )) {
+
+            issues.add(
+                    new FieldIssue(
+                            field,
+                            parentValue,
+                            subCardValue,
+                            "Parent Course card and subCard values do not match."
+                    )
+            );
+        }
+    }
     public record FieldIssue(
             String field,
             String parentValue,
@@ -148,27 +200,25 @@ public final class CourseSubCardContentSupport {
                 issues
         );
 
-        compareRequired(
+
+        compareWhenParentProvidesValue(
                 "Hours",
                 parent.hours(),
                 subCard.hours(),
-                false,
                 issues
         );
 
-        compareRequired(
+        compareWhenParentProvidesValue(
                 "Weeks",
                 parent.weeks(),
                 subCard.weeks(),
-                false,
                 issues
         );
 
-        compareRequired(
+        compareWhenParentProvidesValue(
                 "Level",
                 parent.level(),
                 subCard.level(),
-                false,
                 issues
         );
 

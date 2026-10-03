@@ -27,6 +27,8 @@ import vn.cybersoft.vlearning.data.CourseList.CourseSubCardSupport;
 import vn.cybersoft.vlearning.pages.CourseCardSnapshot;
 import vn.cybersoft.vlearning.pages.CourseCategoryPage;
 import vn.cybersoft.vlearning.data.CourseList.CourseSubCardContentSupport;
+import vn.cybersoft.vlearning.data.CourseList.CourseCardContentSupport;
+
 
 @Epic("V Learning")
 @Feature("Course List")
@@ -1122,6 +1124,167 @@ public class CourseListTests extends BaseTest {
                         + problems.size()
                         + " Danh mục course card(s) contain subCard content problems "
                         + "across "
+                        + fieldFailures
+                        + " field(s). See Allure summary."
+        );
+    }
+    @Test(
+            groups = {"course-integrity-tc4"},
+            testName = "COURSE-INTEGRITY-004 - Khóa học Main Course Card Content Integrity",
+            description = "COURSE-INTEGRITY-004 - Khóa học Main Course Card Content Integrity"
+    )
+    @Story("Every Khóa học main Course card contains its required visible information")
+    @Description(
+            "Traverse every Khóa học pagination page and inspect every rendered "
+                    + "main Course card. Verify Course image, Course name, instructor "
+                    + "avatar, instructor name, original price, conditional discount "
+                    + "price and original-price strikethrough, rating score and review "
+                    + "count. Collect all field-level defects and fail once after the "
+                    + "complete Course catalog sweep. Course Detail pages are not opened."
+    )
+    public void everyCourseListMainCardShouldContainRequiredContent() {
+
+        List<CourseCardContentSupport.CardProblem> problems =
+                new ArrayList<>();
+
+        Set<Integer> visitedPages =
+                new HashSet<>();
+
+        Set<List<String>> visitedDatasets =
+                new HashSet<>();
+
+        int totalCardsChecked =
+                0;
+
+        int fieldFailures =
+                0;
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-004 | Starting Khóa học main-card content sweep"
+        );
+
+        CourseListPage catalog =
+                new HomePage(driver)
+                        .goToCourseListPage();
+
+        CatalogPage page =
+                catalog.captureCurrentPage();
+
+        while (page != null) {
+
+            if (!visitedPages.add(
+                    page.number()
+            )) {
+
+                throw new IllegalStateException(
+                        "Pagination revisited page "
+                                + page.number()
+                );
+            }
+
+            if (!visitedDatasets.add(
+                    page.hrefs()
+            )) {
+
+                throw new IllegalStateException(
+                        "Pagination returned duplicate dataset at page "
+                                + page.number()
+                );
+            }
+
+            int problemCardsOnThisPage =
+                    0;
+
+            int fieldFailuresOnThisPage =
+                    0;
+
+            for (CourseCandidate course
+                    : page.courses()) {
+
+                totalCardsChecked++;
+
+                List<CourseCardContentSupport.FieldIssue> issues =
+                        CourseCardContentSupport.inspect(
+                                course.snapshot()
+                        );
+
+                if (!issues.isEmpty()) {
+
+                    problemCardsOnThisPage++;
+
+                    fieldFailuresOnThisPage +=
+                            issues.size();
+
+                    fieldFailures +=
+                            issues.size();
+
+                    CourseCardContentSupport.CardProblem problem =
+                            new CourseCardContentSupport.CardProblem(
+                                    page.number(),
+                                    course.cardIndex(),
+                                    course.name(),
+                                    course.href(),
+                                    issues
+                            );
+
+                    problems.add(
+                            problem
+                    );
+
+                    LOGGER.warn(
+                            "MAIN CARD CONTENT FAIL | page={} | card={} | name=\"{}\" | fields={}",
+                            page.number(),
+                            course.cardIndex(),
+                            course.name(),
+                            problem.fields()
+                    );
+                }
+            }
+
+            LOGGER.info(
+                    "PAGE {} | cards={} | checked={} | problemCardsThisPage={} | fieldFailuresThisPage={} | totalProblemCards={} | totalFieldFailures={}",
+                    page.number(),
+                    page.courses().size(),
+                    totalCardsChecked,
+                    problemCardsOnThisPage,
+                    fieldFailuresOnThisPage,
+                    problems.size(),
+                    fieldFailures
+            );
+
+            page =
+                    catalog.goToNextPage(
+                            page
+                    );
+        }
+
+        String summary =
+                CourseCardContentSupport.buildDetailedSummary(
+                        visitedPages.size(),
+                        totalCardsChecked,
+                        problems
+                );
+
+        Allure.addAttachment(
+                "COURSE-INTEGRITY-004 Main Course Card Content Summary",
+                "text/plain",
+                summary,
+                ".txt"
+        );
+
+        LOGGER.info(
+                "COURSE-INTEGRITY-004 COMPLETE | pages={} | checked={} | problemCards={} | fieldFailures={}",
+                visitedPages.size(),
+                totalCardsChecked,
+                problems.size(),
+                fieldFailures
+        );
+
+        Assert.assertTrue(
+                problems.isEmpty(),
+                "COURSE-INTEGRITY-004 failed: "
+                        + problems.size()
+                        + " Course card(s) contain main-card content problems across "
                         + fieldFailures
                         + " field(s). See Allure summary."
         );
