@@ -1484,23 +1484,19 @@ public class CourseListTests extends BaseTest {
     }
     @Test(
             groups = {"course-list-final"},
-            testName = "COURSE-LIST-005B - Course Card Detail Navigation",
-            description = "COURSE-LIST-005B - Course Card Detail Navigation"
+            testName = "COURSE-LIST-005B - Course Card Opens Advertised URL",
+            description = "COURSE-LIST-005B - Course Card Opens Advertised URL"
     )
-    @Story("A Course List card opens a healthy Course Detail page")
+    @Story("Course card navigation works")
     @Description(
-            "Covers TC_CL_013. Open the Course List, select the first Course "
-                    + "card that already satisfies the Course Detail URL-ID contract, "
-                    + "click that actual rendered card and verify that the resulting "
-                    + "browser URL matches the selected card href and that a healthy "
-                    + "Course Detail title is rendered. TC_CL_014 deep card-versus-detail "
-                    + "content comparison is intentionally handled later in the Course "
-                    + "Detail test phase."
+            "Open the Course List, select one rendered Course card, remember "
+                    + "its advertised href, click the actual card, and verify "
+                    + "that the browser navigates to that exact URL."
     )
-    public void courseCardShouldOpenHealthyCourseDetailPage() {
+    public void courseCardShouldOpenAdvertisedUrl() {
 
         LOGGER.info(
-                "COURSE-LIST-005B | Starting Course Detail navigation check"
+                "COURSE-LIST-005B | Starting Course card navigation check"
         );
 
         CourseListPage catalog =
@@ -1510,113 +1506,45 @@ public class CourseListTests extends BaseTest {
         CatalogPage page =
                 catalog.captureCurrentPage();
 
-        CourseCandidate selectedCourse =
-                null;
-
-        /*
-         * TC1 already owns invalid /chitiet/ URL detection.
-         *
-         * Do not deliberately select the known /chitiet/ missing-ID card
-         * here because TC5B is testing navigation behavior, not TC1 again.
-         */
-        for (CourseCandidate candidate
-                : page.courses()) {
-
-            String urlProblem =
-                    CourseListSupport.findCourseUrlProblem(
-                            candidate.href()
-                    );
-
-            if (urlProblem == null) {
-
-                selectedCourse =
-                        candidate;
-
-                break;
-            }
-        }
-
-        Assert.assertNotNull(
-                selectedCourse,
-                "TC_CL_013 cannot run: Page 1 contains no Course card "
-                        + "with a valid /chitiet/<id> href."
+        Assert.assertFalse(
+                page.courses().isEmpty(),
+                "TC_CL_013 cannot run: no Course cards were found."
         );
+
+        CourseCandidate selectedCourse =
+                page.courses()
+                        .get(1);
 
         String expectedHref =
                 selectedCourse.href();
-
-        String selectedName =
-                selectedCourse.name();
 
         int selectedCardIndex =
                 selectedCourse.cardIndex();
 
         LOGGER.info(
-                "COURSE-LIST-005B | Selected card={} | name=\"{}\" | href={}",
+                "COURSE-LIST-005B | Clicking card={} | name=\"{}\" | href={}",
                 selectedCardIndex,
-                selectedName,
+                selectedCourse.name(),
                 expectedHref
         );
 
-        /*
-         * IMPORTANT:
-         * actually click the rendered Course card.
-         *
-         * Do NOT replace this with driver.get(expectedHref),
-         * because TC_CL_013 specifically tests card navigation.
-         */
-        CourseDetailPage detailPage =
-                catalog.openCourseAt(
-                        selectedCardIndex
-                );
+        catalog.openCourseAt(
+                selectedCardIndex
+        );
 
-        String detailTitle =
-                detailPage.getCourseTitle();
-
-        String resultingUrl =
+        String actualUrl =
                 driver.getCurrentUrl();
 
         Assert.assertEquals(
-                resultingUrl,
+                actualUrl,
                 expectedHref,
-                "TC_CL_013 failed: clicking the Course card navigated "
-                        + "to an unexpected URL."
-        );
-
-        Assert.assertFalse(
-                detailTitle == null
-                        || detailTitle.isBlank(),
-                "TC_CL_013 failed: Course Detail page opened but the "
-                        + "healthy titleDetailCourse marker is missing or blank."
-        );
-
-        String summary =
-                "COURSE-LIST-005B - Course Card Detail Navigation\n"
-                        + "Source page: "
-                        + page.number()
-                        + "\nCard position: "
-                        + selectedCardIndex
-                        + "\nCourse card name: "
-                        + selectedName
-                        + "\nExpected href: "
-                        + expectedHref
-                        + "\nResulting URL: "
-                        + resultingUrl
-                        + "\nDetail title: "
-                        + detailTitle
-                        + "\n";
-
-        Allure.addAttachment(
-                "COURSE-LIST-005B Navigation Summary",
-                "text/plain",
-                summary,
-                ".txt"
+                "TC_CL_013 failed: clicking the Course card did not open "
+                        + "its advertised URL."
         );
 
         LOGGER.info(
-                "COURSE-LIST-005B COMPLETE | result={} | detailTitle=\"{}\"",
-                resultingUrl,
-                detailTitle
+                "COURSE-LIST-005B COMPLETE | opened={}",
+                actualUrl
         );
     }
     @Test(

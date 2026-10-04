@@ -372,7 +372,7 @@ public class CourseListPage extends BasePage {
      * =============================================================
      */
 
-    public CourseDetailPage openCourseAt(
+    public void openCourseAt(
             int cardIndex
     ) {
 
@@ -390,16 +390,9 @@ public class CourseListPage extends BasePage {
             );
         }
 
-        WebElement card =
-                courseElements.get(
-                        cardIndex - 1
-                );
-
-        card.click();
-
-        return new CourseDetailPage(
-                driver
-        );
+        courseElements
+                .get(cardIndex - 1)
+                .click();
     }
 
     /*
