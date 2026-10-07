@@ -1,135 +1,187 @@
-# VLearningAutomation v1.1.4 — Course List TC1
+# VLearningAutomation v1.1.9 — Course Detail Architecture Refactor
 
-## Baseline and preservation
+## Baseline and scope
 
-Inspected current local project snapshots and GitHub main before editing. The current
-workspace is not a Git checkout. The latest prior local deliverable was v1.1.3;
-GitHub main is also v1.1.3 at commit
-`596b7bbf5e1f3d1f6345090fc6fb207499e48c15`.
-All 23 baseline files were retrieved and checked against their Git blob hashes.
+The actual local `VLearningAutomation-v1.1.8-CourseDetailTC4-TC5.zip` was inspected
+first. Its `build.gradle` version is **1.1.8** and its Course Detail implementation
+is the source of truth. An untouched copy and file hashes were retained for comparison.
 
-The local v1.1.3 snapshot has no local-only source files. Seven Java files differ:
-BasePage, LoginPage, RegisterPage, BaseTest, RegisterInput, LoginTests and RegisterTests.
-GitHub contains later Login/Register work, including successful Login, updated Register
-locators/form reset, configured duplicate data and session cleanup. The existing local
-snapshots were left untouched; this implementation uses a separate copy of current main.
-No changes were pushed to GitHub.
+GitHub was inspected afterward for historical conventions only. Main at
+`853db432d2a49c8b75b683b7e4aab9774b2a6596` reports version **1.1.4** and does not
+contain the current Course Detail implementation. No Course Detail code was rebuilt
+from that stale revision.
 
-The project patch version changed exactly once: **1.1.3 → 1.1.4**. Dependencies, Java 26,
-Gradle Wrapper and Allure configuration are preserved. The actual suite now contains
-**5 Login + 14 Register + 1 Course List = 20 active TestNG methods**.
-The older README's four-Login count and success-last Register order were stale; the
-README now describes current main. Login/Register source and behavior were not changed.
+**One patch increment: 1.1.8 → 1.1.9.** This is an architecture-only release.
+No dependency versions, test contracts, locators or sampling rules changed.
+No sixth Course Detail testcase was added. The suite remains **34 TestNG methods**:
+5 Login, 14 Register, 10 Course List and 5 Course Detail.
 
-## Files created
+## Strict test-class structure
 
-- `src/main/java/vn/cybersoft/vlearning/pages/CourseListPage.java`
-- `src/main/java/vn/cybersoft/vlearning/pages/CourseDetailPage.java`
-- `src/test/java/vn/cybersoft/vlearning/tests/CourseListTests.java`
+| CourseDetailTests measure | Before: v1.1.8 | After: v1.1.9 |
+| --- | ---: | ---: |
+| Source lines | 819 | 161 |
+| Directly declared methods | 29 | 5 |
+| `@Test` methods | 5 | 5 |
+| Helper methods | 24 | 0 |
+| Nested records | 2 | 0 |
+| Other nested classes/enums | 0 | 0 |
 
-## Files modified
+Method counts refer to methods directly declared in `CourseDetailTests`; the old
+record's `logLine()` is part of its nested record, not a direct test-class method.
+The Java syntax-tree inspection confirms that the only remaining methods are:
 
-- `src/main/java/vn/cybersoft/vlearning/pages/HomePage.java`: supplied Khóa học link and navigation method.
-- `src/test/resources/testng.xml`: add CourseListTests; preserve LoginTests/RegisterTests; update the suite's descriptive test label.
-- `build.gradle`: project version only, 1.1.3 → 1.1.4.
-- `README.md`: version, verified test count, current scope and Course-only execution.
-- `CHANGE_REPORT.md`: this implementation and validation report.
+1. `knownCourseShouldExposeCompleteCoreContract()`
+2. `knownCourseShouldExposePopulatedCurriculum()`
+3. `knownCourseShouldExposeValidRelatedCourses()`
+4. `relatedCoursesShouldNavigateToAdvertisedHref()`
+5. `courseCardsShouldMatchTheirCourseDetailIdentity()`
 
-All other baseline files, including BasePage, BaseTest, every Login/Register source,
-resource configuration and Wrapper file, remain byte-for-byte unchanged.
+Every method retains its original `@Test`, group, test name, description, Story and
+Allure Description. There are no extra methods, constructors or nested types in
+the test class. Each scenario performs setup/capture, invokes support, attaches
+evidence, logs its result and asserts the final outcome. Validation loops, reports,
+comparison machinery and data models were not inlined into the test methods.
 
-## Implemented behavior
+## Support responsibilities
 
-Exactly one new TestNG method implements COURSE-LIST-001, Full /khoahoc Course
-Integrity Sweep. It uses the existing BaseTest Homepage setup, clicks the real header
-link through HomePage, and traverses live Next controls. No fixed course/page total,
-previous-page or ellipsis navigation is used.
+### Created: CourseDetailContractSupport.java
 
-CourseListPage captures immutable name, browser-resolved href, page and 1-based card
-index values before opening detail pages. A missing visible name is retained as a
-collection issue, allowing remaining courses to be processed. Snapshot reads retry
-transient stale elements and require two matching explicit-wait polls. Next waits for
-both the active number and href dataset to change; repeated pages/datasets, skipped
-numbers and failure to advance abort as infrastructure failures.
+Owns TC1 core, TC2 curriculum and TC3 related-card validation and evidence.
+Its public entry points are `inspectCore`, `inspectCurriculum` and `inspectRelated`.
+They receive immutable Page Object snapshots and return issues, summary text and,
+for TC3, the problem-card count. The result lists are defensively copied.
 
-The test deduplicates by the resolved href and preserves the first encountered source
-page/index. Each detail opens in a new temporary tab. Its supplied visible healthy
-marker is required. The supplied empty `/chitiet/` path is reported as malformed;
-there is no guessed 404 locator or assumed 404 text assertion. Missing markers and
-course-specific Selenium exceptions become accumulated broken/suspicious findings.
+Moved helpers: `require`, `checkDisplayed`, `checkReadable`, `checkText`, `checkImage`,
+`checkRelatedImage`, `inspectRelatedCard`, `addRelatedIssues`, `buildSummary`,
+`buildCurriculumSummary`, `relatedSummaryHeader`, `appendRelatedCard`,
+`appendRelatedIssues`, `appendField` and `appendImage`.
 
-Each failure captures a PNG while the detail tab is still active and attaches its
-name, href, source page, index, resulting URL and reason. Then the detail tab closes,
-the catalog tab is selected, and its page/dataset is revalidated. Unusable sessions,
-invalid selectors, failed evidence capture and failed catalog recovery abort with an
-explicit infrastructure error instead of masquerading as individual course defects.
+The small shared `require`, `checkDisplayed` and `appendRelatedIssues` helpers have
+package visibility for reuse by navigation support. Browser interaction, Allure calls
+and final TestNG assertions are not in this class.
 
-A final Allure text attachment/log reports completion, pages, unique discovered and
-scanned counts, healthy/broken counts, and every broken-course detail. The only TestNG
-assertion follows the entire sweep and includes all failures. An infrastructure abort
-attaches the partial summary when the test body has started. BaseTest's existing final
-failure screenshot and cleanup are preserved.
+### Created: CourseDetailNavigationSupport.java
 
-Navigation is limited to 30 seconds within this test's fresh browser; marker/catalog
-waits reuse BasePage's 15-second explicit wait. No sleeps, implicit waits, parallelism,
-DataProviders, listeners, API mocks or server-failure simulations were added.
-The temporary-tab implementation could not be exercised end to end in this runtime;
-no claim is made that live tab recovery or per-course evidence was verified here.
+Owns TC4's per-card orchestration through the existing Page Object navigation methods,
+navigation snapshot inspection, issue collection, result model and summary generation.
+Its public `inspect` entry point receives the Page Object and captured card targets.
 
-## Commands and actual results
+Moved helpers: `inspectRelatedNavigation`, `addRelatedNavigationIssues` and
+`appendRelatedNavigation`.
 
-Gradle Wrapper tasks were invoked through a local verification launcher that supplies
-JDK 26, the existing Gradle cache and the environment's TLS/proxy settings. That launcher
-and environment settings are not included in the project. The project commands were:
+TC4 still checks every rendered related card through both the main-card and
+`XEM CHI TIẾT` paths: click performed, navigation observed, advertised href matched
+and Course Detail root displayed. It does not compare Course names, instructors
+or other Course data. Page Objects still perform the clicks, hover and observation.
+
+### Expanded: CourseDetailConsistencySupport.java
+
+The existing sampling and comparison members are unchanged. The class now also owns
+TC5 source traversal, the local href-keyed Detail identity cache, defect conversion,
+source assessments, result models and the full consistency report. The public
+`inspectSources(WebDriver)` entry point uses existing Page Objects to capture sources
+and Detail identity; existing direct URL navigation is retained.
+
+Moved helpers: `checkConsistencySource`, `compareCandidate`, `addConsistencyDefects`,
+`buildConsistencySummary`, `sourceLabel` and `display`. The two browser orchestration
+helpers are now static and receive the current WebDriver explicitly.
+
+Moved records: `ConsistencySourceResult` and `ConsistencyDefect`, including the
+unchanged defect `logLine()` formatting. A `ConsistencyResult` exposes the collected
+sources, defects, counts and summary to the test method.
+
+TC5 still checks candidate 1 for each source; only a failed representative triggers
+diagnosis of candidates 2–5, up to five total Courses. Sources remain Homepage,
+the initial Khóa học page, every discovered Danh mục and related Courses from
+`/chitiet/.100`. Category-discovery and missing-candidate defects remain failures.
+Main-card and available subCard Course-name/instructor comparisons are preserved,
+including ellipsis-aware Course names and normalized instructor whitespace.
+The shared href cache remains local to one testcase. No pagination, exhaustive
+audit, related recursion, API checks or enrollment behavior was added.
+
+## Exact changed-file scope
+
+Modified existing files:
+
+1. `src/test/java/vn/cybersoft/vlearning/tests/CourseDetailTests.java`
+2. `src/test/java/vn/cybersoft/vlearning/data/CourseDetail/CourseDetailConsistencySupport.java`
+3. `build.gradle` — project version only.
+4. `README.md` — version, support responsibilities and permanent architecture rule.
+5. `CHANGE_REPORT.md` — this release report.
+
+Created files:
+
+1. `src/test/java/vn/cybersoft/vlearning/data/CourseDetail/CourseDetailContractSupport.java`
+2. `src/test/java/vn/cybersoft/vlearning/data/CourseDetail/CourseDetailNavigationSupport.java`
+
+The other **31 original project files are byte-for-byte unchanged**, including
+`CourseDetailPage`, Login/Register/Course List implementations, shared card readers,
+base classes, `testng.xml`, Gradle Wrapper files and logging configuration.
+All Page Object locators and the frontend spellings `detailCoures` and
+`instrutorTitle` are preserved. There are no unrelated changes or dependency changes.
+The final ZIP contains 38 project files, including 25 Java files; temporary
+verification tools and generated build/IDE output are excluded. No push was made.
+
+README now makes the rule permanent for all new test classes, including future
+Enroll, CancelCourse and Profile tests: testcase methods only; reusable validation,
+helpers and reports in support; browser interaction in Page Objects.
+
+## Validation performed — 2026-10-07
+
+### Source preservation and structure
+
+- All 25 Java source files parsed successfully using the available compiler's syntax
+  parser. The 34 direct Course Detail XPath expressions also parsed successfully.
+  This does not perform dependency resolution or Java 26 type checking.
+- The syntax tree confirms five directly declared methods, five original `@Test`
+  annotations and zero nested types in `CourseDetailTests`.
+- All 24 moved helper bodies were compared to v1.1.8. Bodies are unchanged except
+  the explicit driver argument forwarded to `compareCandidate` from its new static
+  caller. Model changes are visibility changes needed by the new support API.
+- Complete TC1–TC3 validation/report blocks, the TC4 navigation/report loop and the
+  TC5 source/cache/report orchestration were compared to their original blocks.
+  The only orchestration changes are support delegation and explicit driver passing.
+- All original members of the pre-existing consistency support class are unchanged.
+- The five Allure attachment calls, warning/completion messages and final assertions
+  were compared to the original code, allowing only access through the support result.
+  Per-module/card/source logs now originate in their responsible support classes.
+- File hashes verify the preserved baseline, unchanged Page Objects and unrelated
+  files. The no-index Git diff against the supplied local snapshot was reviewed.
+
+### Requested real build and runtime checks
+
+Before refactoring, both the main/test compilation command and the full Course Detail
+test command were attempted against v1.1.8. After refactoring, these commands were
+attempted against v1.1.9:
 
 ```sh
-./gradlew compileJava compileTestJava
-./gradlew test --tests vn.cybersoft.vlearning.tests.CourseListTests
+bash gradlew compileJava compileTestJava --console=plain --no-daemon
+bash gradlew clean test --tests 'vn.cybersoft.vlearning.tests.CourseDetailTests' --console=plain --no-daemon
 ```
 
-- Main and test compilation: **PASSED** with Java 26 and the pinned dependencies.
-- Course-only execution: **BLOCKED in BaseTest.setUp**, before the test body.
-  ChromeDriver returned `SessionNotCreatedException`: Chrome exited during startup.
-- A second Course-only run used `cleanTest test --tests ...` plus an external diagnostic
-  init script enabling ChromeDriver logging. It recompiled the final test source and
-  confirmed the cause: `Running as root without --no-sandbox is not supported.`
-  BaseTest/ChromeOptions were left unchanged. No unsafe browser flag was added.
-- TestNG recorded a failed setup configuration and one skipped Course TC1 method in
-  each attempt. LoginTests and RegisterTests were not executed.
-- **Courses discovered/scanned by Selenium: 0; the sweep never started.**
-  Healthy/broken counts and broken-course findings are **unavailable**, not a zero-defect
-  result. No full-catalog PASS, website defect verdict or screenshot validation is claimed.
-- Allure's existing finalizer ran after both failed test tasks. Raw JSON records exist
-  for broken setup and skipped Course TC1, with Epic/Feature/Story and Description.
-  The final Course TC1 report title includes COURSE-LIST-001. The self-contained
-  `build/reports/allure-report/allureReport/index.html` was generated (3,700,681 bytes).
-  No per-course screenshots exist because Chrome setup failed before course navigation.
+Both before and after, commands exited **1 before any Gradle task started**:
+the Wrapper could not download
+`https://downloads.gradle.org/distributions/gradle-9.7.1-bin.zip`, reporting
+`java.net.SocketException: Network is unreachable`.
+The environment has Java **17.0.20**; the project remains configured for Java **26**.
+Neither dependency versions nor the Java requirement was downgraded.
 
-Separate browser inspection (not the Selenium run) observed the supplied catalog
-selectors matching 12 cards on page 1. Clicking the supplied Next item advanced the
-active page to 2; after loading, that page also had 12 matching cards. Pagination DOM
-showed the disabled class on Previous at page 1. A `/chitiet/` link was observed among
-page-1 cards, but its detail health was not checked. These observations are neither a
-full catalog count nor a substitute for executing CourseListTests.
+| Requested result | Observed outcome |
+| --- | --- |
+| Main compilation | Blocked before Gradle tasks; no compile verdict |
+| Test compilation | Blocked before Gradle tasks; no compile verdict |
+| TC1 core contract | Not executed |
+| TC2 curriculum contract | Not executed |
+| TC3 related-card contract | Not executed |
+| TC4 navigation | Not executed |
+| TC5 frontend consistency | Not executed |
+| Five tests independently discovered by TestNG | Original method names/groups/annotations preserved; runtime discovery unverified |
+| Pre-existing live product failures unchanged | Unverified; no before/after browser execution was possible |
+| Allure evidence | All five summary calls and logical report content preserved; no new runtime attachments/report generated |
 
-## Final inspection and delivery
-
-Package declarations match folders, imports compile, the seven new XPath uses match
-the vault exactly, and no raw locators occur in CourseListTests. There is exactly one
-new @Test and one final aggregated assertion. XML retains all three test classes.
-The Wrapper scripts/JAR/properties are preserved. No extra framework classes or
-unrelated feature tests were added.
-
-The ZIP contains the complete `VLearningAutomation/` project root with 26 source,
-configuration, Wrapper and documentation files. Generated builds, verification scripts,
-logs, local caches and browser inspection artifacts are excluded.
-
-To complete the live sweep on a normal desktop with Chrome installed, open the project
-in IntelliJ with JDK 26 and run CourseListTests, or use:
-
-```powershell
-.\gradlew.bat clean test --tests "vn.cybersoft.vlearning.tests.CourseListTests"
-```
-
-Genuine broken-course assertions remain failures. The automatic Allure report and its
-per-course attachments will describe the actual live catalog result from that run.
+No PASS result or live product defect verdict is claimed. The source comparison
+confirms that validation conditions, failure collection and final assertions were
+preserved; it cannot establish current frontend outcomes. Full verification still
+requires JDK 26, Chrome and access to the Gradle distribution/dependencies or a
+compatible populated cache. Genuine product defects must continue to fail when run.

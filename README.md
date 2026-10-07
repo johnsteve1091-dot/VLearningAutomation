@@ -1,94 +1,274 @@
-# VLearningAutomation — v1.1.4
+# VLearningAutomation — v1.1.9
 
-Cybersoft V Learning Selenium capstone: **5 Login + 14 Register + 1 Course List =
-20 active TestNG methods**. Course List TC1 is one test that checks every unique
-course advertised by the live paginated catalog.
+Cybersoft V Learning Selenium capstone. The active source contains **34 TestNG
+methods**:
 
-Stack: **Java 26**, Gradle Wrapper **9.7.1**, Selenium **4.49.0**,
-TestNG **7.12.0**, Log4j **2.26.1**, Chrome. Allure Gradle plugin **4.3.0**,
+| Test class | Methods | Current scope |
+| --- | ---: | --- |
+| LoginTests | 5 | Existing Login scenarios, including successful login |
+| RegisterTests | 14 | Existing Register scenarios and smoke test |
+| CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
+| CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
+
+The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
+Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
+their behavior and execution order.
+
+Stack: Java **26**, Gradle Wrapper **9.7.1**, Selenium **4.49.0**, TestNG
+**7.12.0**, Log4j **2.26.1**, Google Chrome. Allure Gradle plugin **4.3.0**,
 report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 
 ## Open and run
 
-1. Extract the ZIP and open its `VLearningAutomation` folder directly in IntelliJ IDEA.
-2. Use **JDK 26** for both Project SDK and Gradle JVM.
-3. Allow Gradle to sync.
-4. Install Google Chrome; Selenium Manager resolves ChromeDriver automatically.
-5. Run `CourseListTests` from IntelliJ or use the filtered Gradle command below.
+1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
+2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
+3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
+4. Run CourseDetailTests first to exercise TC1 through TC5.
 
-From PowerShell in the project root:
+PowerShell, from the project root:
 
 ```powershell
-.\gradlew.bat clean test --tests "vn.cybersoft.vlearning.tests.CourseListTests"
+.\gradlew.bat compileJava compileTestJava
+.\gradlew.bat clean test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests"
 ```
 
-On macOS/Linux:
+Linux/macOS equivalents (invoking Bash also works when the extracted Wrapper lacks
+the executable permission):
 
 ```sh
-./gradlew clean test --tests "vn.cybersoft.vlearning.tests.CourseListTests"
+bash gradlew compileJava compileTestJava
+bash gradlew clean test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests"
 ```
 
-To run all 20 methods, use `testng.xml` or `gradlew.bat clean test`. To run only
-Login or Register, replace `CourseListTests` in the filtered command. The existing
-Login suite includes successful login; the Register suite includes real registration.
-Their current data and behavior are preserved from main.
+Run TC2 independently with:
 
-## Course List TC1
+```powershell
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
+```
 
-`COURSE-LIST-001 - Full /khoahoc Course Integrity Sweep` starts with BaseTest's
-Homepage and clicks the supplied Khóa học header link. It snapshots each page's
-course names, resolved hrefs, page numbers and 1-based card indexes, then checks
-each unique href in a temporary detail tab. Returning to the catalog reconfirms
-the same page and href dataset before continuing.
+To run all 34 methods, use `src/test/resources/testng.xml` in IntelliJ or
+`gradlew.bat clean test`. For another class, change the fully qualified class
+name in `--tests`. Existing Login/Register tests include real authentication and
+registration; their existing behavior and fixtures are preserved.
 
-The supplied visible Course Detail marker is the positive health contract. Missing
-markers, an empty `/chitiet/` detail path and course-specific Selenium failures are
-recorded with immediate detail-tab screenshots. Missing course-name data is retained
-as a collection issue so it does not silently skip the course. No 404 locator is used.
+## Course Detail TC1
 
-The sweep follows live Next controls until absent/disabled/unusable, without fixed
-page or course totals. Explicit waits require a stable snapshot and, after Next,
-both the active page and course href dataset to change. Repeated pages/datasets,
-skipped page numbers or stuck Next abort clearly as traversal infrastructure failures.
+**COURSE-DETAIL-001 — Course Detail Core Contract** is one independent TestNG method
+in group `course-detail-tc1`. After the existing Homepage setup, it opens the known
+specimen directly:
 
-Each detail navigation has a 30-second page-load timeout; existing explicit waits
-are 15 seconds. Course failures accumulate and cause **one final assertion** after
-the full sweep. An unusable session, failed catalog recovery or unavailable evidence
-aborts with an infrastructure error and a partial summary. A setup failure before the
-test starts is reported by TestNG/Allure; no course count is inferred from it.
+`https://demo2.cybersoft.edu.vn/chitiet/.100`
+
+The dot in `.100` is intentional. This test implements the supplied 27 core
+requirements and consolidates **TC_CD_001–TC_CD_017** into one result:
+
+| Legacy cases | Core information |
+| --- | --- |
+| TC_CD_001–003 | Visible detail root/content, fixed title/subtitle, nonblank course name |
+| TC_CD_004–007 | Instructor name/avatar, field/category, rendered rating icons, rating/review text |
+| TC_CD_008–010 | Description, learning-objectives heading/content, loaded course image |
+| TC_CD_011–016 | Nonblank price, enrollments, duration, lessons, videos and level |
+| TC_CD_017 | Displayed and enabled Đăng ký button |
+
+Both images must be displayed, have a nonblank `src`, and satisfy the browser's
+`complete && naturalWidth > 0` loading state. No separate HTTP image request is made.
+Sidebar values are found by their labels, rather than row indexes. Course-specific
+names, amounts and counts are read from the page and are not hardcoded expectations.
+
+The Page Object uses the observed `detailCoures` and `instrutorTitle` spellings.
+One shared 15-second
+explicit-wait budget covers the root, asynchronous field content and image
+completion. Missing fields remain in the captured snapshot when that budget expires,
+so the test can collect all ordinary field problems and fail once. Unusable sessions,
+WebDriver command failures and persistently unobservable DOM state remain
+infrastructure failures.
+
+The button's displayed/enabled state is checked without clicking or hovering it.
+There is no enrollment, curriculum traversal, related-card inspection, responsive
+layout check, API comparison or catalog/detail sweep in this testcase.
+
+## Course Detail TC2
+
+**COURSE-DETAIL-002 — Course Curriculum Contract**, group `course-detail-tc2`,
+covers only **TC_CD_019 and TC_CD_020**. It independently opens the same known
+specimen through the existing navigation method; it does not depend on TC1.
+
+The test checks the displayed curriculum and exact `Nội dung khóa học` heading,
+at least one module, each module's content/header structure and readable title,
+lesson containers, at least one lesson across the whole curriculum, and every
+discovered lesson's visible nonblank title. A module may contain zero lessons if
+the complete curriculum still contains lessons. Counts, titles, numbering and
+ordering are not fixed expectations.
+
+Module and lesson lookup uses relative locators. Immutable snapshots retain
+strings, booleans and indexes, never WebElements. The existing explicit-wait pattern
+is reused with two matching ready observations. If ordinary missing/blank content
+persists through the wait, the latest complete observation is inspected and all
+actionable defects are collected before one final assertion. A missing parent
+does not generate redundant failures for unavailable children. Available lessons
+are still inspected when another part of their module is defective.
+
+TC2 does not require durations or preview buttons and performs no preview/media
+interaction. TC_CD_018 (register-button hover), enrollment and related courses are
+outside its scope.
+
+## Course Detail TC3, TC4 and TC5
+
+These recommendations are inside Course Detail, so TC3 and TC4 remain in
+CourseDetailTests. TC5 then checks whether Course-card identity rendered on each
+frontend card surface corresponds to the Course Detail identity for that advertised
+href. All three reuse the existing Course-card parser/snapshot model.
+
+**COURSE-DETAIL-003 — Related Courses Contract** (`course-detail-tc3`) covers
+**TC_CD_021–TC_CD_030**. It checks the displayed section/heading, one to four
+recommendation cards, every card's nonblank name and valid `/chitiet/<non-empty-id>`
+href, course/instructor image health, instructor name and original/current price.
+A rendered discount must be nonblank and its original price must have the shared
+line-through decoration. No sale is required. A DOM-present subCard must have a
+nonblank description; specifications are captured without fixed value expectations.
+TC3 performs no hover, card click or destination navigation. It collects all ordinary
+field problems and fails once.
+
+**COURSE-DETAIL-004 — Related Course Navigation** (`course-detail-tc4`) covers only
+navigation. Starting from `https://demo2.cybersoft.edu.vn/chitiet/.100`, it captures
+only each rendered related card's immutable 1-based index and href before interaction.
+For every card it:
+
+1. Reopens the known source and rediscovers the card from the fresh DOM.
+2. Clicks the normal main-card path and verifies the resulting browser URL matches the
+   captured href and a Course Detail root displays.
+3. Reopens the source, rediscovers the card again, hovers only to expose the existing
+   `XEM CHI TIẾT` control, clicks it normally, and verifies the same URL/root contract.
+
+TC4 does **not** compare Course names, instructors, prices, ratings, descriptions,
+images, specifications, curriculum or any other Course data. Hover is only an
+interaction mechanic. No WebElement survives navigation, no Course ID is required to
+be numeric, no `Thread.sleep()` or JavaScript click is used, and failures are limited
+to actual navigation/click/root problems.
+
+**COURSE-DETAIL-005 — Course Card and Detail Frontend Consistency**
+(`course-detail-tc5`) is one independent frontend consistency testcase. It visits
+these distinct card surfaces:
+
+- Homepage Course cards.
+- The initial rendered `/khoahoc` page only; TC5 does not traverse its pagination.
+- Every Danh mục URL discovered through the existing Homepage support.
+- Related Courses from the known `/chitiet/.100` source, one depth only.
+
+For each source instance TC5 captures up to the first five valid immutable card
+snapshots in natural rendered order, then compares **candidate 1** against Course
+Detail. A healthy representative ends checking for that source immediately. If the
+first representative fails, TC5 retains that failure and inspects candidates 2–5 only
+for diagnosis. Sampling is deterministic and never becomes an exhaustive catalog
+audit.
+
+TC5 compares only shared frontend identity information whose equivalence is clear:
+main-card Course name and instructor name, plus subCard Course name/instructor when a
+subCard exists. Course-name comparison reuses the existing ellipsis-aware matcher;
+instructor names use normalized whitespace equality. TC5 deliberately does not map
+hours to duration, weeks to lesson count, card level to unrelated detail metadata,
+raw image URLs, descriptions, prices, ratings or review counts without a proven shared
+business contract. It uses direct `driver.get(candidate.href())` after source snapshots
+are captured, so click/back recovery is not part of this consistency test. Detail
+identity snapshots may be reused when multiple sources advertise the same href.
+
+Run the three tests independently:
+
+```powershell
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposeValidRelatedCourses"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.relatedCoursesShouldNavigateToAdvertisedHref"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.courseCardsShouldMatchTheirCourseDetailIdentity"
+```
+
+No exhaustive API validation, recursive Related Course traversal or sixth Course
+Detail testcase is included.
 
 ## Architecture
 
-- `BaseTest`: fresh Chrome, EAGER loading, Homepage setup, final failure screenshot,
-  session cleanup and quit. Unchanged in v1.1.4.
-- `BasePage`: existing explicit-wait and element helpers. Unchanged.
-- `HomePage`: navigation to Login and Course List.
-- `CourseListPage`: authoritative catalog locators, immutable snapshots and Next traversal.
-- `CourseDetailPage`: opening discovered hrefs and checking the supplied healthy marker.
-- `CourseListTests`: orchestration, href deduplication, evidence, summary and assertion.
-- Existing Login/Register Page Objects, data/support classes and tests are preserved.
-  Login IDs are LOG-001–005; Register has REG-001–013 plus REG-SMOKE-001. Current
-  main runs successful registration REG-002 first, followed by the other Register cases.
-  Known-existing duplicate Account/Email prerequisites remain in `RegisterInput.Existing`.
+**Permanent rule: test classes contain testcase methods only.** Reusable
+helper/validation/reporting logic belongs in support classes. Browser interaction
+belongs in Page Objects. A test arranges the scenario, invokes Page Objects/support,
+logs the high-level result, attaches Allure evidence and performs its final assertion.
+Do not inline helper machinery into test methods to bypass this rule.
 
-## Allure
+All new test classes must follow this rule, including future `EnrollTests`,
+`CancelCourseTests` and Profile tests. Test classes must not declare additional
+helper/utility methods of any visibility or nested records, classes or enums.
+Constants, logger fields, annotations and imports are allowed. Existing Login,
+Register and Course List test classes are outside this architecture-only release.
 
-The existing `test` finalizer generates `allureReport` even when tests fail. Genuine
-failures remain failures. Raw JSON and PNG evidence go to `build/allure-results/`.
-The self-contained report is `build/reports/allure-report/allureReport/index.html`.
+- `BaseTest`: fresh Chrome for each method, EAGER loading, Homepage setup, failure
+  screenshot before session cleanup and browser quit.
+- `BasePage`: existing explicit-wait and element helpers.
+- `HomePage`, `CourseListPage`, `CourseCategoryPage`: existing navigation,
+  card extraction and catalog traversal.
+- `CourseCardDomReader`, `CourseCardSnapshot`: existing Course card capture/model.
+- `CourseDetailPage`: all Course Detail locators, known URL navigation, core/image
+  capture, scoped curriculum/module/lesson snapshots, minimal identity capture for
+  TC5, and href-only related-card navigation support for TC4.
+- `CourseDetailTests`: exactly five declared methods, each an independent `@Test`;
+  scenario setup, support invocation, concise logs, one Allure summary and the final
+  assertion. It has no helpers or nested types.
+- `CourseDetailContractSupport`: TC1 core, TC2 curriculum and TC3 related-card
+  snapshot validation, issue collection, result models and summary generation.
+- `CourseDetailNavigationSupport`: TC4 orchestration through existing Page Object
+  navigation methods, href/root validation, issue collection and navigation evidence.
+  It performs no Course-name or instructor comparison.
+- `CourseDetailConsistencySupport`: TC5 source orchestration, deterministic
+  first-valid sampling (1 normally, up to 5 only after representative failure),
+  Course-name/instructor comparisons, href-keyed Detail caching, source/defect models
+  and consistency summary generation. It receives the current WebDriver; Page
+  Objects continue to own DOM discovery and capture.
+- `CourseCardDomReader`: reused card parsing; existing Course List calls retain their
+  behavior.
+- `CourseSubCardContentSupport.courseNamesMatch`: existing ellipsis-aware Course-name
+  comparison reused without changing its algorithm.
+- Existing Login/Register pages, data/support classes and tests remain unchanged.
 
-Allure includes human-readable titles, descriptions, V Learning → Feature → Story,
-status, duration and stack traces. Course TC1 adds per-broken-course screenshots and
-details plus a final complete/partial summary. BaseTest's final screenshot is preserved.
+The page and test classes were added locally in v1.1.5. This release refactors the
+authoritative local v1.1.8 snapshot into v1.1.9 without changing the five contracts.
+The inspected GitHub main remains at the older v1.1.4 and was used only for historical
+conventions. `CourseDetailPage`, all locators and dependency versions are unchanged.
+
+## Allure and results
+
+The current build retains its automatic `test` → `allureReport` finalizer.
+Existing failure conditions and final assertions are preserved. Raw Allure JSON and
+attachments use `build/allure-results/`; Gradle's test report is
+`build/reports/tests/test/index.html`.
+
+When the Course Detail test body completes its inspection, it attaches one
+`COURSE-DETAIL-001 Course Detail core contract summary` containing requested/resulting
+URLs, captured values, image health, button state and every issue. The console logs
+start/completion, a course/issue count, and warnings for actual problems. The existing
+BaseTest adds its normal final screenshot on assertion failure.
+
+TC2 attaches `COURSE-DETAIL-002 Course curriculum summary`: URLs, section/title
+state, discovered module/lesson totals, per-module titles/counts, lesson title
+evidence and every issue. Its console logs one line per module and warnings only
+for defects; successful lessons are detailed only in the attachment.
+
+TC3 adds one related-content summary with every card, URLs, image health, instructor,
+prices, description/specifications, problem-card count and all field failures. TC4
+adds a compact navigation summary for both main-card and `XEM CHI TIẾT` paths with
+captured href, resulting URL, Course Detail root state and navigation failures only.
+TC5 attaches one detailed consistency summary covering source instances, representative
+href/name/result, any failure-triggered diagnostic expansion, per-comparison advertised
+versus Detail identity values, totals and mismatch records. No raw HTML or per-success
+screenshots are attached.
+
+If browser setup fails, TestNG/Allure show the failed configuration and skipped test;
+there is no core summary or screenshot from a test body that never ran.
+If the Gradle Wrapper cannot bootstrap, neither TestNG nor Allure runs at all.
 
 ```powershell
-.\gradlew.bat allureServe
 .\gradlew.bat allureReport
-.\gradlew.bat tasks --group allure
-.\gradlew.bat tasks --all | Select-String allure
+.\gradlew.bat allureServe
 ```
 
-`allureReport` regenerates from existing results without rerunning tests. Do not run
-`clean` between a test run and manual report regeneration. Expected tasks include
-`allureReport`, `allureServe` and `downloadAllure`. Generated output is ignored by Git
-and excluded from the ZIP. See `CHANGE_REPORT.md` for this revision's actual validation.
+`allureReport` regenerates from existing results without rerunning tests. Avoid
+`clean` between a run and report regeneration. Report provisioning requires its
+Node/Allure runtime to be available.
+
+See `CHANGE_REPORT.md` for the exact validation performed for this deliverable.
+Generated output, IDE files and local verification caches are excluded from the ZIP.

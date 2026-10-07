@@ -312,7 +312,7 @@ public final class CourseSubCardContentSupport {
      * This avoids falsely failing an intentionally truncated title
      * while still catching completely unrelated course names.
      */
-    private static boolean courseNamesMatch(
+    public static boolean courseNamesMatch(
             String parentValue,
             String subCardValue
     ) {

@@ -1,6 +1,7 @@
 package vn.cybersoft.vlearning.pages;
 
 import java.util.List;
+import java.util.Map;
 
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
@@ -177,6 +178,15 @@ public final class CourseCardDomReader {
             WebElement courseElement,
             int cardIndex
     ) {
+        return capture(courseElement, cardIndex, false);
+    }
+
+    /** Opt-in strict reads for new contracts; existing Course List behavior is unchanged. */
+    public static CourseCardSnapshot captureStrict(WebElement courseElement, int cardIndex) {
+        return capture(courseElement, cardIndex, true);
+    }
+
+    private static CourseCardSnapshot capture(WebElement courseElement, int cardIndex, boolean strict) {
 
         String href =
                 normalize(
@@ -186,13 +196,15 @@ public final class CourseCardDomReader {
         ImageState courseImage =
                 readImageState(
                         courseElement,
-                        COURSE_IMAGE
+                        COURSE_IMAGE,
+                        strict
                 );
 
         ImageState instructorAvatar =
                 readImageState(
                         courseElement,
-                        INSTRUCTOR_AVATAR
+                        INSTRUCTOR_AVATAR,
+                        strict
                 );
 
         ParentContent parent =
@@ -370,7 +382,8 @@ public final class CourseCardDomReader {
 
     private static ImageState readImageState(
             WebElement root,
-            By locator
+            By locator,
+            boolean strict
     ) {
 
         List<WebElement> elements =
@@ -405,6 +418,8 @@ public final class CourseCardDomReader {
                     image.isDisplayed();
 
         } catch (RuntimeException ignored) {
+
+            if (strict) throw ignored;
 
             displayed =
                     false;
@@ -490,6 +505,58 @@ public final class CourseCardDomReader {
         return full.isBlank()
                 ? line
                 : full;
+    }
+
+    public static boolean hasDisplayedDiscount(WebElement card) {
+        List<WebElement> prices = card.findElements(DISCOUNTED_PRICE);
+        return !prices.isEmpty() && prices.getFirst().isDisplayed();
+    }
+
+    public record FieldState(boolean present, boolean displayed, boolean enabled, String text) {
+    }
+
+    public record HoverState(boolean present, boolean displayed, Map<String, FieldState> fields,
+                             int avatarNaturalWidth) {
+        public HoverState {
+            fields = Map.copyOf(fields);
+        }
+
+        public boolean ready() {
+            return displayed && avatarNaturalWidth > 0
+                    && fields.entrySet().stream().allMatch(entry -> {
+                        FieldState field = entry.getValue();
+                        boolean optional = List.of("Hours", "Weeks", "Level").contains(entry.getKey());
+                        return (optional && !field.present()) || (field.displayed()
+                                && (entry.getKey().equals("Instructor avatar") || !field.text().isBlank()));
+                    });
+        }
+    }
+
+    /** Visible text is distinct from the DOM text captured for non-hover inspection. */
+    public static HoverState captureHoverState(WebElement card) {
+        List<WebElement> subCards = card.findElements(SUB_CARD);
+        if (subCards.isEmpty()) return new HoverState(false, false, Map.of(), 0);
+        WebElement subCard = subCards.getFirst();
+        Map<String, FieldState> fields = Map.of(
+                "Course name", readFieldState(subCard, SUB_CARD_COURSE_NAME),
+                "Instructor name", readFieldState(subCard, SUB_CARD_INSTRUCTOR_NAME),
+                "Instructor avatar", readFieldState(subCard, SUB_CARD_INSTRUCTOR_AVATAR),
+                "Description", readFieldState(subCard, SUB_CARD_DESCRIPTION),
+                "Hours", readFieldState(subCard, SUB_CARD_HOURS),
+                "Weeks", readFieldState(subCard, SUB_CARD_WEEKS),
+                "Level", readFieldState(subCard, SUB_CARD_LEVEL),
+                "Detail button", readFieldState(subCard, SUB_CARD_DETAIL_BUTTON));
+        List<WebElement> avatars = subCard.findElements(SUB_CARD_INSTRUCTOR_AVATAR);
+        return new HoverState(true, subCard.isDisplayed(), fields,
+                avatars.isEmpty() ? 0 : readNaturalWidth(avatars.getFirst()));
+    }
+
+    private static FieldState readFieldState(WebElement root, By locator) {
+        List<WebElement> fields = root.findElements(locator);
+        if (fields.isEmpty()) return new FieldState(false, false, false, "");
+        WebElement field = fields.getFirst();
+        boolean displayed = field.isDisplayed();
+        return new FieldState(true, displayed, field.isEnabled(), displayed ? normalize(field.getText()) : "");
     }
 
     private static String normalize(
