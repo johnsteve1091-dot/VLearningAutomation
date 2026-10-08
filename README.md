@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.9
+# VLearningAutomation — v1.1.10
 
-Cybersoft V Learning Selenium capstone. The active source contains **34 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **35 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -9,6 +9,7 @@ methods**:
 | RegisterTests | 14 | Existing Register scenarios and smoke test |
 | CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
 | CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
+| EnrollTests | 1 | ENROLL-001 success popup and exact Course in My Courses; targeted cancellation and application logout |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -23,13 +24,14 @@ report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
 2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
 3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
-4. Run CourseDetailTests first to exercise TC1 through TC5.
+4. Run only EnrollTests first for this release. CourseDetailTests still exercises
+   the five existing Course Detail contracts independently.
 
 PowerShell, from the project root:
 
 ```powershell
 .\gradlew.bat compileJava compileTestJava
-.\gradlew.bat clean test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
 Linux/macOS equivalents (invoking Bash also works when the extracted Wrapper lacks
@@ -37,7 +39,7 @@ the executable permission):
 
 ```sh
 bash gradlew compileJava compileTestJava
-bash gradlew clean test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
 Run TC2 independently with:
@@ -46,10 +48,61 @@ Run TC2 independently with:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 34 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 35 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
-registration; their existing behavior and fixtures are preserved.
+registration; their existing behavior and fixtures are preserved. Enrollment also
+mutates account state and must complete its targeted cleanup before another run.
+
+## Enrollment TC1
+
+**ENROLL-001 — Successful course enrollment**, group `enroll-tc1`, is the only
+Enrollment testcase. It uses the confirmed existing Login credentials in
+`data/enroll/EnrollInput`; the unrelated registration-form sample password is not used.
+Existing Login/Register source remains unchanged.
+
+The test logs in through the existing Login Page Object, waits for the authenticated
+header, opens the first discovered Danh mục through the normal menu, and captures the
+first usable rendered card's nonblank **`span.stikerCard`** name and Detail href.
+It does not inspect all Course fields, traverse pagination or sweep other categories.
+The existing card parser is preserved; its h6 content is not substituted for the
+Enrollment identity bridge.
+
+Before any enrollment click, a read-only visit to My Courses confirms that this exact
+name is not already enrolled. If it exists, setup fails and leaves it untouched.
+The test returns through the same category menu, rediscovers the selected card by
+href and name, clicks its main image and waits for the advertised Detail URL, visible
+root and clickable existing Đăng ký button. No title, Course ID or category ID is a
+hardcoded test expectation.
+
+There are exactly two business assertions:
+
+1. The visible SweetAlert title is exactly **`Đăng kí thành công`**, with `kí` and
+   no period. The test waits for this dialog to close before account navigation.
+2. My Courses contains one visible item whose h6 equals the captured `.stikerCard`
+   name after whitespace normalization. Case, accents and quotation marks are
+   preserved; names are compared as Java strings, not concatenated into XPath.
+
+The `finally` path runs after any enrollment attempt, including an assertion failure
+after the server may have accepted the action. Because the exact name was absent
+before the attempt, cleanup can target this run's course without deleting an existing
+enrollment. It clicks Hủy khóa học only inside the unique exact-title item and waits
+until that same item is absent. Multiple same-title matches cause an explicit failure
+instead of an ambiguous cancellation. Other account courses are never cancelled.
+
+Application logout uses the observed `span.logout` under the avatar/account link,
+then verifies the Login control is visible and the account link is no longer displayed. Logout is
+attempted even if cancellation fails. Browser storage clearing in BaseTest remains
+additional session hygiene, not a replacement for application logout.
+
+If a business assertion already failed, cleanup/logout failures are logged and added
+as suppressed exceptions to that original failure. If business assertions passed but
+cleanup or logout fails, the testcase fails. Allure receives selected-course and popup
+evidence, a cleanup/logout summary, and the original failing screen before cleanup
+when screenshot capture is available. No Cancel Course testcase is added.
+
+Live execution, removal and logout remain unverified in this delivery environment;
+see `CHANGE_REPORT.md` for the actual Gradle blocker and offline checks.
 
 ## Course Detail TC1
 
@@ -191,11 +244,11 @@ belongs in Page Objects. A test arranges the scenario, invokes Page Objects/supp
 logs the high-level result, attaches Allure evidence and performs its final assertion.
 Do not inline helper machinery into test methods to bypass this rule.
 
-All new test classes must follow this rule, including future `EnrollTests`,
+All new test classes must follow this rule, including `EnrollTests` and future
 `CancelCourseTests` and Profile tests. Test classes must not declare additional
 helper/utility methods of any visibility or nested records, classes or enums.
 Constants, logger fields, annotations and imports are allowed. Existing Login,
-Register and Course List test classes are outside this architecture-only release.
+Register and Course List test classes are outside this Enrollment release.
 
 - `BaseTest`: fresh Chrome for each method, EAGER loading, Homepage setup, failure
   screenshot before session cleanup and browser quit.
@@ -219,16 +272,26 @@ Register and Course List test classes are outside this architecture-only release
   Course-name/instructor comparisons, href-keyed Detail caching, source/defect models
   and consistency summary generation. It receives the current WebDriver; Page
   Objects continue to own DOM discovery and capture.
+- `EnrollTests`: one declared `@Test` method with scenario orchestration and two
+  business assertions; no helpers, nested types, raw locators or DOM parsing.
+- `AccountPage`: account-data readiness, My Courses selection, exact-title lookup
+  and cancellation/removal of only the selected course.
+- `HomePage`, `CourseCategoryPage`, `CourseDetailPage`: additive header/category
+  navigation, Enrollment selection and popup operations; existing methods are preserved.
+- `EnrollmentSupport`: failure-safe cleanup/logout orchestration, evidence and error
+  preservation. Page Objects own the application interactions.
+- `EnrollInput`: the small Enrollment credential/expected-message holder.
 - `CourseCardDomReader`: reused card parsing; existing Course List calls retain their
   behavior.
 - `CourseSubCardContentSupport.courseNamesMatch`: existing ellipsis-aware Course-name
   comparison reused without changing its algorithm.
 - Existing Login/Register pages, data/support classes and tests remain unchanged.
 
-The page and test classes were added locally in v1.1.5. This release refactors the
-authoritative local v1.1.8 snapshot into v1.1.9 without changing the five contracts.
-The inspected GitHub main remains at the older v1.1.4 and was used only for historical
-conventions. `CourseDetailPage`, all locators and dependency versions are unchanged.
+Course Detail was added locally in v1.1.5 and its support architecture was established
+in v1.1.9. This release adds only Enrollment TC1 to that authoritative local v1.1.9
+snapshot. The inspected GitHub main remains at v1.1.4. All existing Course Detail
+methods, locators and support classes remain unchanged; Enrollment methods are added
+to the existing Page Object. Dependency versions are unchanged.
 
 ## Allure and results
 

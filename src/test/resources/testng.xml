@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <suite name="V Learning Foundation">
-    <test name="Login, Register, Course List and Course Detail">
+    <test name="Login, Register, Course List, Course Detail and Enrollment">
         <classes>
             <class name="vn.cybersoft.vlearning.tests.LoginTests"/>
             <class name="vn.cybersoft.vlearning.tests.RegisterTests"/>
             <class name="vn.cybersoft.vlearning.tests.CourseListTests"/>
             <class name="vn.cybersoft.vlearning.tests.CourseDetailTests"/>
+            <class name="vn.cybersoft.vlearning.tests.EnrollTests"/>
         </classes>
     </test>
 </suite>

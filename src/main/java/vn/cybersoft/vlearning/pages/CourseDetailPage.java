@@ -19,6 +19,7 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.interactions.MoveTargetOutOfBoundsException;
+import org.openqa.selenium.support.ui.ExpectedConditions;
 
 import vn.cybersoft.vlearning.core.BasePage;
 
@@ -74,6 +75,9 @@ public class CourseDetailPage extends BasePage {
     private static final By REGISTER_BUTTON = By.xpath(SIDEBAR_PATH
             + "//button[contains(@class,'btnPreview') and normalize-space()='Đăng ký']");
 
+    private static final By ENROLLMENT_DIALOG = By.cssSelector("div.swal-modal[role='dialog']");
+    private static final By ENROLLMENT_DIALOG_TITLE = By.cssSelector("div.swal-modal[role='dialog'] .swal-title");
+
     private static final String CURRICULUM_PATH = ROOT_PATH + "//div[contains(@class,'courseContent')]";
     private static final By CURRICULUM = By.xpath(CURRICULUM_PATH);
     private static final By CURRICULUM_TITLE = By.xpath(CURRICULUM_PATH
@@ -106,6 +110,31 @@ public class CourseDetailPage extends BasePage {
     public CourseDetailPage openKnownCourse() {
         driver.get(KNOWN_COURSE_URL);
         return this;
+    }
+
+    public CourseDetailPage waitUntilEnrollmentReady() {
+        waitUntilVisible(ROOT);
+        waitUntilEnrollmentPopupClosed();
+        waitUntilClickable(REGISTER_BUTTON);
+        return this;
+    }
+
+    public void clickEnroll() {
+        click(REGISTER_BUTTON);
+    }
+
+    public String waitForEnrollmentPopupTitle() {
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            for (WebElement title : currentDriver.findElements(ENROLLMENT_DIALOG_TITLE)) {
+                if (title.isDisplayed() && !title.getText().isBlank()) return title.getText().strip();
+            }
+            return null;
+        });
+    }
+
+    public void waitUntilEnrollmentPopupClosed() {
+        // The supplied success-dialog DOM has no dismiss button.
+        getWait().until(ExpectedConditions.invisibilityOfElementLocated(ENROLLMENT_DIALOG));
     }
 
     /**
