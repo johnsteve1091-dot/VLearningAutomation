@@ -32,7 +32,7 @@ public class EnrollTests extends BaseTest {
     )
     @Story("A logged-in learner enrolls in a Course")
     @Description("Browse one Danh mục Course and capture its stikerCard name. Verify Đăng kí thành công "
-            + "and the exact Course in My Courses. Cancel only this run's enrollment, verify removal and log out, "
+            + "and the exact Course in My Courses. Cancel only this run's enrollment and verify removal, "
             + "including after a business assertion fails. Existing enrollments are never removed.")
     public void healthyCourseShouldEnrollAndAppearInMyCourses() {
         String selectedCourseName = null;
@@ -80,5 +80,27 @@ public class EnrollTests extends BaseTest {
             EnrollmentSupport.finish(driver, EnrollInput.ACCOUNT, selectedCourseName,
                     enrollmentAttempted, primaryFailure);
         }
+    }
+
+    @Test(
+            groups = {"enroll-tc2"},
+            testName = "ENROLL-002 - Guest enrollment redirects to Login",
+            description = "ENROLL-002 - Guest user is redirected to Login when attempting Course enrollment"
+    )
+    @Story("Guest enrollment requires authentication")
+    @Description("Open one healthy Course while logged out, click Đăng ký and verify "
+            + "that the browser is redirected to the /login route.")
+    public void guestEnrollmentShouldRedirectToLogin() {
+        HomePage homePage = new HomePage(driver);
+        var categoryPage = homePage.goToFirstCourseCategory();
+        var selected = categoryPage.selectCourseForEnrollment();
+        CourseDetailPage detailPage = categoryPage.openCourseForEnrollment(selected);
+
+        detailPage.clickEnroll();
+
+        LoginPage loginPage = new LoginPage(driver);
+        Assert.assertTrue(loginPage.waitUntilAtLoginPage(),
+                "Guest enrollment attempt should redirect to /login.");
+        LOGGER.info("ENROLL-002 | Guest enrollment redirected to /login");
     }
 }

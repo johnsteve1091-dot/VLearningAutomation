@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.10
+# VLearningAutomation — v1.1.12
 
-Cybersoft V Learning Selenium capstone. The active source contains **35 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **36 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -9,7 +9,7 @@ methods**:
 | RegisterTests | 14 | Existing Register scenarios and smoke test |
 | CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
 | CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
-| EnrollTests | 1 | ENROLL-001 success popup and exact Course in My Courses; targeted cancellation and application logout |
+| EnrollTests | 2 | ENROLL-001 authenticated enrollment, exact My Courses verification and cleanup; ENROLL-002 guest enrollment redirects to /login |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -24,13 +24,15 @@ report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
 2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
 3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
-4. Run only EnrollTests first for this release. CourseDetailTests still exercises
-   the five existing Course Detail contracts independently.
+4. Run ENROLL-001 alone, ENROLL-002 alone, then the full EnrollTests class.
+   CourseDetailTests still exercises the five existing Course Detail contracts independently.
 
 PowerShell, from the project root:
 
 ```powershell
 .\gradlew.bat compileJava compileTestJava
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
@@ -39,25 +41,35 @@ the executable permission):
 
 ```sh
 bash gradlew compileJava compileTestJava
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
-Run TC2 independently with:
+Run Course Detail TC2 independently with:
 
 ```powershell
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 35 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 36 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
-registration; their existing behavior and fixtures are preserved. Enrollment also
+registration; their existing behavior and fixtures are preserved. ENROLL-001 also
 mutates account state and must complete its targeted cleanup before another run.
 
-## Enrollment TC1
+## Enrollment tests
+
+Enrollment contains two independent tests: ENROLL-001 verifies authenticated
+enrollment and its cleanup; ENROLL-002 verifies the guest redirect to `/login`.
+The v1.1.12 source audit found no contract defect requiring a TC1 or TC2 code change.
+Both implementations are preserved from local v1.1.11. Compilation and all three
+requested test runs were attempted; their actual results are in `CHANGE_REPORT.md`.
+
+### ENROLL-001 — Successful enrollment
 
 **ENROLL-001 — Successful course enrollment**, group `enroll-tc1`, is the only
-Enrollment testcase. It uses the confirmed existing Login credentials in
+authenticated Enrollment testcase. It uses the confirmed existing Login credentials in
 `data/enroll/EnrollInput`; the unrelated registration-form sample password is not used.
 Existing Login/Register source remains unchanged.
 
@@ -101,8 +113,20 @@ cleanup or logout fails, the testcase fails. Allure receives selected-course and
 evidence, a cleanup/logout summary, and the original failing screen before cleanup
 when screenshot capture is available. No Cancel Course testcase is added.
 
-Live execution, removal and logout remain unverified in this delivery environment;
-see `CHANGE_REPORT.md` for the actual Gradle blocker and offline checks.
+### ENROLL-002 — Guest redirect
+
+**ENROLL-002 — Guest enrollment redirects to Login**, group `enroll-tc2`, covers
+legacy TC_ENR_002. BaseTest supplies a fresh guest browser on the Homepage.
+The test reuses `goToFirstCourseCategory()`, `selectCourseForEnrollment()` and
+`openCourseForEnrollment(...)` on the same category Page Object, then clicks the
+existing Đăng ký button once. It performs exactly one business assertion:
+`LoginPage.waitUntilAtLoginPage()` confirms that the URL path reaches `/login`
+using the existing explicit wait. Query parameters and fragments do not affect
+the path comparison; Login form fields are not inspected.
+
+TC2 performs no login, My Courses visit, enrollment-success popup check, cancellation
+or application logout. TC1 and its failure-safe cleanup are unchanged.
+See `CHANGE_REPORT.md` for this release's actual validation results.
 
 ## Course Detail TC1
 
@@ -272,8 +296,9 @@ Register and Course List test classes are outside this Enrollment release.
   Course-name/instructor comparisons, href-keyed Detail caching, source/defect models
   and consistency summary generation. It receives the current WebDriver; Page
   Objects continue to own DOM discovery and capture.
-- `EnrollTests`: one declared `@Test` method with scenario orchestration and two
-  business assertions; no helpers, nested types, raw locators or DOM parsing.
+- `EnrollTests`: two declared `@Test` methods; TC1 retains its two business assertions,
+  and TC2 has one redirect assertion. No helpers, nested types, raw locators or DOM parsing.
+- `LoginPage.waitUntilAtLoginPage`: explicit wait for the `/login` URL path only.
 - `AccountPage`: account-data readiness, My Courses selection, exact-title lookup
   and cancellation/removal of only the selected course.
 - `HomePage`, `CourseCategoryPage`, `CourseDetailPage`: additive header/category
@@ -288,10 +313,11 @@ Register and Course List test classes are outside this Enrollment release.
 - Existing Login/Register pages, data/support classes and tests remain unchanged.
 
 Course Detail was added locally in v1.1.5 and its support architecture was established
-in v1.1.9. This release adds only Enrollment TC1 to that authoritative local v1.1.9
-snapshot. The inspected GitHub main remains at v1.1.4. All existing Course Detail
-methods, locators and support classes remain unchanged; Enrollment methods are added
-to the existing Page Object. Dependency versions are unchanged.
+in v1.1.9. Enrollment TC1 was added in v1.1.10 and TC2 in local v1.1.11.
+The v1.1.12 audit delivery uses that newer local baseline; inspected GitHub main
+still reports v1.1.10. All Java source files, including both Enrollment tests,
+their Page Objects and support flow, remain unchanged from v1.1.11.
+Dependency versions are unchanged.
 
 ## Allure and results
 
