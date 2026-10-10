@@ -6,6 +6,9 @@ import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
 import io.qameta.allure.Story;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.testng.Assert;
@@ -14,6 +17,7 @@ import org.testng.annotations.Test;
 import vn.cybersoft.vlearning.base.BaseTest;
 import vn.cybersoft.vlearning.data.enroll.EnrollInput;
 import vn.cybersoft.vlearning.data.enroll.EnrollmentSupport;
+import vn.cybersoft.vlearning.data.login.LoginSupport;
 import vn.cybersoft.vlearning.pages.AccountPage;
 import vn.cybersoft.vlearning.pages.CourseDetailPage;
 import vn.cybersoft.vlearning.pages.HomePage;
@@ -192,8 +196,20 @@ public class EnrollTests extends BaseTest {
             primaryFailure = failure;
             throw failure;
         } finally {
-            EnrollmentSupport.finish(driver, "ENROLL-004", EnrollInput.ACCOUNT, EnrollInput.PASSWORD,
-                    selectedCourseName, enrollmentAttempted, primaryFailure);
+            try {
+                if (enrollmentAttempted) {
+                    LoginSupport.restoreSessionForCleanup(driver, EnrollInput.ACCOUNT, EnrollInput.PASSWORD);
+                }
+            } catch (RuntimeException | AssertionError recoveryFailure) {
+                if (primaryFailure == null) {
+                    primaryFailure = recoveryFailure;
+                    throw recoveryFailure;
+                }
+                primaryFailure.addSuppressed(recoveryFailure);
+            } finally {
+                EnrollmentSupport.finish(driver, "ENROLL-004", EnrollInput.ACCOUNT,
+                        selectedCourseName, enrollmentAttempted, primaryFailure);
+            }
         }
     }
 
@@ -265,8 +281,160 @@ public class EnrollTests extends BaseTest {
             primaryFailure = failure;
             throw failure;
         } finally {
-            EnrollmentSupport.finish(driver, "ENROLL-005", EnrollInput.ACCOUNT, EnrollInput.PASSWORD,
-                    selectedCourseName, enrollmentAttempted, primaryFailure);
+            try {
+                if (enrollmentAttempted) {
+                    LoginSupport.restoreSessionForCleanup(driver, EnrollInput.ACCOUNT, EnrollInput.PASSWORD);
+                }
+            } catch (RuntimeException | AssertionError recoveryFailure) {
+                if (primaryFailure == null) {
+                    primaryFailure = recoveryFailure;
+                    throw recoveryFailure;
+                }
+                primaryFailure.addSuppressed(recoveryFailure);
+            } finally {
+                EnrollmentSupport.finish(driver, "ENROLL-005", EnrollInput.ACCOUNT,
+                        selectedCourseName, enrollmentAttempted, primaryFailure);
+            }
+        }
+    }
+
+    @Test(
+            groups = {"enroll-tc6"},
+            testName = "ENROLL-006 - Duplicate course enrollment is prevented",
+            description = "ENROLL-006 - Re-enrolling the same Course is rejected and My Courses keeps only one copy"
+    )
+    @Story("Duplicate enrollment is prevented")
+    @Description("TC_ENR_010 + TC_ENR_011: Enroll one absent Course, attempt the same Course again, "
+            + "verify the exact duplicate title and one My Courses entry, then cancel only the owned Course.")
+    public void duplicateEnrollmentShouldBePrevented() {
+        String selectedCourseName = null;
+        boolean enrollmentAttempted = false;
+        Throwable primaryFailure = null;
+
+        try {
+            HomePage homePage = new HomePage(driver);
+            LoginPage loginPage = homePage.goToLoginPage();
+            loginPage.enterAccount(EnrollInput.ACCOUNT);
+            loginPage.enterPassword(EnrollInput.PASSWORD);
+            loginPage.clickLogin();
+            if (!loginPage.waitUntilLoggedIn()) {
+                throw new IllegalStateException("ENROLL-006 setup failed: Login did not complete.");
+            }
+            homePage.waitUntilAuthenticated();
+
+            var selected = homePage.goToFirstCourseCategory().selectCourseForEnrollment();
+            selectedCourseName = selected.courseName();
+            LOGGER.info("ENROLL-006 SETUP | course=\"{}\" | href=\"{}\"", selectedCourseName, selected.href());
+            AccountPage accountPage = homePage.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT);
+            accountPage.requireCourseNotEnrolled(selectedCourseName);
+            CourseDetailPage detailPage = homePage.goToCourseCategory(selected.categoryUrl())
+                    .openCourseForEnrollment(selected);
+
+            enrollmentAttempted = true;
+            detailPage.clickEnroll();
+            String popupTitle = detailPage.waitForEnrollmentPopupTitle();
+            if (!EnrollInput.SUCCESS_TITLE.equals(popupTitle)) {
+                throw new IllegalStateException("ENROLL-006 setup failed: expected enrollment popup \""
+                        + EnrollInput.SUCCESS_TITLE + "\", actual \"" + popupTitle + "\".");
+            }
+            detailPage.waitUntilEnrollmentPopupClosed();
+            accountPage = homePage.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT);
+            if (!accountPage.waitUntilCoursePresent(selectedCourseName)) {
+                throw new IllegalStateException("ENROLL-006 setup failed: selected Course is absent after enrollment: "
+                        + selectedCourseName);
+            }
+            LOGGER.info("ENROLL-006 SETUP | First enrollment succeeded | course=\"{}\"", selectedCourseName);
+
+            detailPage = homePage.goToCourseCategory(selected.categoryUrl()).openCourseForEnrollment(selected);
+            detailPage.clickEnroll();
+            String duplicateTitle = detailPage.waitForEnrollmentPopupTitle();
+            LOGGER.info("ENROLL-006 | Duplicate popup title=\"{}\"", duplicateTitle);
+            Assert.assertEquals(duplicateTitle, EnrollInput.DUPLICATE_TITLE,
+                    "Second enrollment of the same Course must show the current duplicate warning.");
+            detailPage.waitUntilEnrollmentPopupClosed();
+
+            accountPage = homePage.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT);
+            int occurrences = accountPage.countExactCourseItems(selectedCourseName);
+            LOGGER.info("ENROLL-006 | course=\"{}\" | exact My Courses occurrences={}", selectedCourseName, occurrences);
+            Assert.assertEquals(occurrences, 1,
+                    "The exact selected Course must occur once in My Courses: " + selectedCourseName);
+        } catch (RuntimeException | AssertionError failure) {
+            primaryFailure = failure;
+            throw failure;
+        } finally {
+            EnrollmentSupport.finish(driver, "ENROLL-006", EnrollInput.ACCOUNT, selectedCourseName,
+                    enrollmentAttempted, primaryFailure);
+        }
+    }
+
+    @Test(
+            groups = {"enroll-tc7"},
+            testName = "ENROLL-007 - Multiple different courses can be enrolled",
+            description = "ENROLL-007 - Two distinct Courses can coexist in My Courses"
+    )
+    @Story("Learner can enroll in multiple different Courses")
+    @Description("TC_ENR_006: Enroll two absent Courses with different hrefs and exact titles, verify "
+            + "that both coexist in My Courses, then independently cancel only the two owned Courses.")
+    public void differentCoursesShouldCoexistInMyCourses() {
+        List<String> ownedCourseNames = new ArrayList<>(2);
+        Throwable primaryFailure = null;
+
+        try {
+            HomePage homePage = new HomePage(driver);
+            LoginPage loginPage = homePage.goToLoginPage();
+            loginPage.enterAccount(EnrollInput.ACCOUNT);
+            loginPage.enterPassword(EnrollInput.PASSWORD);
+            loginPage.clickLogin();
+            if (!loginPage.waitUntilLoggedIn()) {
+                throw new IllegalStateException("ENROLL-007 setup failed: Login did not complete.");
+            }
+            homePage.waitUntilAuthenticated();
+
+            var courseA = homePage.goToFirstCourseCategory().selectCourseForEnrollment();
+            LOGGER.info("ENROLL-007 SETUP | Course A=\"{}\" | href=\"{}\"", courseA.courseName(), courseA.href());
+            AccountPage accountPage = homePage.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT);
+            accountPage.requireCourseNotEnrolled(courseA.courseName());
+            CourseDetailPage detailPage = homePage.goToCourseCategory(courseA.categoryUrl())
+                    .openCourseForEnrollment(courseA);
+
+            ownedCourseNames.add(courseA.courseName());
+            detailPage.clickEnroll();
+            String popupTitle = detailPage.waitForEnrollmentPopupTitle();
+            if (!EnrollInput.SUCCESS_TITLE.equals(popupTitle)) {
+                throw new IllegalStateException("ENROLL-007 setup failed for Course A: expected \""
+                        + EnrollInput.SUCCESS_TITLE + "\", actual \"" + popupTitle + "\".");
+            }
+            detailPage.waitUntilEnrollmentPopupClosed();
+            LOGGER.info("ENROLL-007 SETUP | Course A enrollment succeeded");
+
+            var courseB = homePage.selectDifferentCourseForEnrollment(courseA);
+            LOGGER.info("ENROLL-007 SETUP | Distinct Course B=\"{}\" | href=\"{}\"", courseB.courseName(), courseB.href());
+            accountPage = homePage.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT);
+            accountPage.requireCourseNotEnrolled(courseB.courseName());
+            detailPage = homePage.goToCourseCategory(courseB.categoryUrl()).openCourseForEnrollment(courseB);
+
+            ownedCourseNames.add(courseB.courseName());
+            detailPage.clickEnroll();
+            popupTitle = detailPage.waitForEnrollmentPopupTitle();
+            if (!EnrollInput.SUCCESS_TITLE.equals(popupTitle)) {
+                throw new IllegalStateException("ENROLL-007 setup failed for Course B: expected \""
+                        + EnrollInput.SUCCESS_TITLE + "\", actual \"" + popupTitle + "\".");
+            }
+            detailPage.waitUntilEnrollmentPopupClosed();
+            LOGGER.info("ENROLL-007 SETUP | Course B enrollment succeeded");
+
+            accountPage = homePage.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT);
+            boolean courseAPresent = accountPage.waitUntilCoursePresent(courseA.courseName());
+            LOGGER.info("ENROLL-007 | Course A=\"{}\" | present={}", courseA.courseName(), courseAPresent);
+            Assert.assertTrue(courseAPresent, "Course A must coexist in My Courses: " + courseA.courseName());
+            boolean courseBPresent = accountPage.waitUntilCoursePresent(courseB.courseName());
+            LOGGER.info("ENROLL-007 | Course B=\"{}\" | present={}", courseB.courseName(), courseBPresent);
+            Assert.assertTrue(courseBPresent, "Course B must coexist in My Courses: " + courseB.courseName());
+        } catch (RuntimeException | AssertionError failure) {
+            primaryFailure = failure;
+            throw failure;
+        } finally {
+            EnrollmentSupport.finish(driver, "ENROLL-007", EnrollInput.ACCOUNT, ownedCourseNames, primaryFailure);
         }
     }
 }

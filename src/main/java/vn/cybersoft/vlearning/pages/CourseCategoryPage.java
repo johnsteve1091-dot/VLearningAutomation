@@ -102,6 +102,16 @@ public class CourseCategoryPage extends BasePage {
 
     /** Stops at the first usable rendered card; no pagination or catalog audit. */
     public EnrollmentCourse selectCourseForEnrollment() {
+        return selectCourseForEnrollment(null);
+    }
+
+    /** A second course needs a different href and an unambiguous My Courses title. */
+    public EnrollmentCourse selectDifferentCourseForEnrollment(EnrollmentCourse excludedCourse) {
+        if (excludedCourse == null) throw new IllegalArgumentException("The first selected Course is required.");
+        return selectCourseForEnrollment(excludedCourse);
+    }
+
+    private EnrollmentCourse selectCourseForEnrollment(EnrollmentCourse excludedCourse) {
         waitUntilLoaded();
         String categoryUrl = driver.getCurrentUrl();
         return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
@@ -112,6 +122,8 @@ public class CourseCategoryPage extends BasePage {
                 List<WebElement> names = card.findElements(ENROLLMENT_COURSE_NAME);
                 if (names.isEmpty() || !names.get(0).isDisplayed()) continue;
                 String name = normalize(names.get(0).getText());
+                if (excludedCourse != null && (CourseDetailPage.sameBrowserUrl(excludedCourse.href(), href)
+                        || normalize(excludedCourse.courseName()).equals(name))) continue;
                 if (!name.isBlank()) return new EnrollmentCourse(categoryUrl, href, name);
             }
             return null;

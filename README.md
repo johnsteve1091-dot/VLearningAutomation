@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.14
+# VLearningAutomation — v1.1.15
 
-Cybersoft V Learning Selenium capstone. The active source contains **39 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **41 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -9,7 +9,7 @@ methods**:
 | RegisterTests | 14 | Existing Register scenarios and smoke test |
 | CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
 | CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
-| EnrollTests | 5 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence |
+| EnrollTests | 7 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence; ENROLL-006 duplicate protection; ENROLL-007 two distinct courses |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -24,18 +24,20 @@ report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
 2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
 3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
-4. Run ENROLL-004 alone, ENROLL-005 alone, TC1–TC3 alone, then the full EnrollTests class.
+4. Run ENROLL-006 alone, ENROLL-007 alone, TC1–TC5 alone, then the full EnrollTests class.
    CourseDetailTests still exercises the five existing Course Detail contracts independently.
 
 PowerShell, from the project root:
 
 ```powershell
 .\gradlew.bat compileJava compileTestJava
-.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh"
-.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.duplicateEnrollmentShouldBePrevented"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.differentCoursesShouldCoexistInMyCourses"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestLoginShouldReturnToSameCourseDetail"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
@@ -44,11 +46,13 @@ the executable permission):
 
 ```sh
 bash gradlew compileJava compileTestJava
-bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh"
-bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.duplicateEnrollmentShouldBePrevented"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.differentCoursesShouldCoexistInMyCourses"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestLoginShouldReturnToSameCourseDetail"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
@@ -58,19 +62,21 @@ Run Course Detail TC2 independently with:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 39 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 41 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
-registration; their existing behavior and fixtures are preserved. ENROLL-001, TC4
-and TC5 mutate account state and must complete their targeted cleanup before another run.
+registration; their existing behavior and fixtures are preserved. ENROLL-001, TC4,
+TC5, TC6 and TC7 mutate account state and must complete targeted cleanup before another run.
 
 ## Enrollment tests
 
-Enrollment contains five independent tests: ENROLL-001 verifies authenticated
+Enrollment contains seven independent tests: ENROLL-001 verifies authenticated
 enrollment, exact My Courses identity and targeted cancellation; ENROLL-002 verifies
 the guest redirect to `/login`; ENROLL-003 verifies return to the original Course
 Detail after login; ENROLL-004 verifies persistence after My Courses refresh;
-ENROLL-005 verifies persistence after real application logout and login again.
+ENROLL-005 verifies persistence after real application logout and login again;
+ENROLL-006 verifies duplicate enrollment protection and one exact entry;
+ENROLL-007 verifies that two different Courses coexist in My Courses.
 BaseTest owns final browser/session cleanup for every test.
 See `CHANGE_REPORT.md` for the source comparison and actual validation results.
 
@@ -184,10 +190,49 @@ Application logout happens once as the TC5 scenario step, never after cleanup.
 Both persistence tests call the shared failure-safe cleanup in `finally`. It cancels
 only the owned exact-title Course and verifies removal, preserving any primary
 failure and suppressing cleanup errors. Cleanup failure after scenario success fails
-the test. If authentication was lost after enrollment, the new overload can restore
-the same test login through Page Objects solely to perform targeted cancellation.
-It never logs out or clears browser storage. TC1 retains its existing caller and
-cancellation-only behavior; TC1–TC3 testcase implementations are unchanged.
+the test. If authentication was lost after enrollment, TC4/TC5 call
+`LoginSupport.restoreSessionForCleanup(...)` through Page Objects before cancellation.
+This preserves their existing recovery behavior while keeping login outside
+EnrollmentSupport. Only their cleanup orchestration changes in this release;
+TC1–TC3 testcase implementations remain unchanged. Generic cleanup never logs in,
+logs out, clears browser storage or quits the driver.
+
+### ENROLL-006 — Duplicate enrollment protection
+
+**ENROLL-006 — Duplicate course enrollment is prevented**, group `enroll-tc6`,
+maps to **TC_ENR_010 + TC_ENR_011**. It selects one healthy Course using the
+existing card path and guards that exact name is absent. The first enrollment's
+success title and exact My Courses presence establish setup. The test returns to
+the same captured category/card href and name, then clicks Đăng ký a second time.
+
+Its two business assertions check the exact current duplicate title
+**`Đã đăng ký khóa học này rồi!`** from `EnrollInput.DUPLICATE_TITLE`, then that
+the selected Course occurs **exactly once** in My Courses after the popup closes.
+`AccountPage.countExactCourseItems(...)` counts items with an exact normalized
+visible h6 title, including multiple matches; it never substitutes the account's
+total course count. The existing generic popup reader/explicit close wait is reused.
+
+### ENROLL-007 — Two different Courses coexist
+
+**ENROLL-007 — Multiple different courses can be enrolled**, group `enroll-tc7`,
+maps to **TC_ENR_006** and uses **two Courses**. It guards A absent, enrolls A and
+confirms the success title as setup. The shared card selector then skips A's href
+and normalized title to find the first healthy B with a distinct identity. A
+different exact title is required because My Courses exposes names rather than IDs.
+
+Selection tries the same rendered category and at most one other discovered
+category, without pagination or a catalog sweep. Failure to find B in that bounded
+search fails setup clearly. B's absence is checked independently; A's existing
+enrollment is expected. After B's success setup guard and popup close, exactly
+two business assertions verify exact A presence and exact B presence together.
+
+TC6 owns one attempted Course; TC7 adds each name to its owned list immediately
+before its respective enrollment click, after its absence guard. Shared cleanup
+attempts every owned exact-title cancellation independently and verifies removal.
+A failure cleaning A does not skip B. Pre-existing and unrelated enrollments are
+never cancelled. Any cleanup error is suppressed on the original failure, or fails
+an otherwise successful scenario. No cleanup login or application logout is added
+to TC6/TC7; BaseTest owns final session teardown.
 
 ## Course Detail TC1
 

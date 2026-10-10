@@ -8,6 +8,7 @@ import java.util.Set;
 
 import org.openqa.selenium.By;
 import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.Actions;
@@ -177,6 +178,31 @@ public class HomePage extends BasePage {
         });
         target.click();
         return new CourseCategoryPage(driver).waitUntilLoaded();
+    }
+
+    /** Search the same rendered category, then at most one other discovered category. */
+    public CourseCategoryPage.EnrollmentCourse selectDifferentCourseForEnrollment(
+            CourseCategoryPage.EnrollmentCourse firstCourse) {
+        CourseCategoryPage categoryPage = goToCourseCategory(firstCourse.categoryUrl());
+        try {
+            return categoryPage.selectDifferentCourseForEnrollment(firstCourse);
+        } catch (TimeoutException noDifferentCourse) {
+            String otherCategory = getCourseCategoryUrls().stream()
+                    .filter(url -> !CourseDetailPage.sameBrowserUrl(firstCourse.categoryUrl(), url))
+                    .findFirst().orElse(null);
+            if (otherCategory == null) {
+                throw new IllegalStateException("ENROLL-007 setup requires two healthy Courses with different hrefs "
+                        + "and exact titles; no other category was available.", noDifferentCourse);
+            }
+            categoryPage = goToCourseCategory(otherCategory);
+            try {
+                return categoryPage.selectDifferentCourseForEnrollment(firstCourse);
+            } catch (TimeoutException noSecondCourse) {
+                throw new IllegalStateException("ENROLL-007 setup could not find a second healthy Course with a "
+                        + "different href and exact title in the selected category or one other discovered category.",
+                        noSecondCourse);
+            }
+        }
     }
 
     public AccountPage goToAccountPage() {
