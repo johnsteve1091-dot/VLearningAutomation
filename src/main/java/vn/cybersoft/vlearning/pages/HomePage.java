@@ -1,5 +1,6 @@
 package vn.cybersoft.vlearning.pages;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -60,18 +61,16 @@ public class HomePage extends BasePage {
     private static final By CATEGORY_MENU = By.cssSelector("li.courseCate");
     private static final By ACCOUNT_LINK = By.cssSelector("a.infoHeader[href='/thongtincanhan']");
     private static final By ACCOUNT_AVATAR = By.cssSelector("a.infoHeader[href='/thongtincanhan'] img.avatar");
-    private static final By LOGOUT_ICON =
-            By.cssSelector(
-                    "a.infoHeader[href='/thongtincanhan'] "
-                            + "span.logout i.fa-power-off"
-            );
+    private static final By LOGOUT_CONTROL = By.cssSelector("a.infoHeader[href='/thongtincanhan'] span.logout");
 
     public HomePage(WebDriver driver) {
         super(driver);
     }
 
     public LoginPage goToLoginPage() {
-        click(LOGIN_BUTTON);
+        if (!"/login".equals(URI.create(driver.getCurrentUrl()).getPath())) {
+            click(LOGIN_BUTTON);
+        }
         return new LoginPage(driver);
     }
 
@@ -143,6 +142,21 @@ public class HomePage extends BasePage {
         return this;
     }
 
+    /** Waits for a known header state or the standalone Login route. */
+    public boolean isAuthenticated() {
+        String state = getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            if (currentDriver.findElements(ACCOUNT_LINK).stream().anyMatch(WebElement::isDisplayed)) {
+                return "authenticated";
+            }
+            if ("/login".equals(URI.create(currentDriver.getCurrentUrl()).getPath())
+                    || currentDriver.findElements(LOGIN_BUTTON).stream().anyMatch(WebElement::isDisplayed)) {
+                return "guest";
+            }
+            return null;
+        });
+        return "authenticated".equals(state);
+    }
+
     public CourseCategoryPage goToFirstCourseCategory() {
         List<String> categoryUrls = getCourseCategoryUrls();
         if (categoryUrls.isEmpty()) {
@@ -182,18 +196,11 @@ public class HomePage extends BasePage {
         });
         if ("guest".equals(state)) return false;
 
-        Actions actions = new Actions(driver);
-
-        actions.moveToElement(waitUntilVisible(ACCOUNT_AVATAR))
-                .perform();
-
-        WebElement logoutIcon = waitUntilVisible(LOGOUT_ICON);
-
-        actions.moveToElement(logoutIcon)
-                .click()
-                .perform();
+        new Actions(driver).moveToElement(waitUntilVisible(ACCOUNT_AVATAR)).perform();
+        click(LOGOUT_CONTROL);
         getWait().ignoring(StaleElementReferenceException.class).until(currentDriver ->
-                currentDriver.findElements(ACCOUNT_LINK).stream().noneMatch(WebElement::isDisplayed));
+                currentDriver.findElements(ACCOUNT_LINK).stream().noneMatch(WebElement::isDisplayed)
+                        && currentDriver.findElements(LOGIN_BUTTON).stream().anyMatch(WebElement::isDisplayed));
         return true;
     }
 }

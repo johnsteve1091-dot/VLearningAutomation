@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.12
+# VLearningAutomation — v1.1.14
 
-Cybersoft V Learning Selenium capstone. The active source contains **36 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **39 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -9,7 +9,7 @@ methods**:
 | RegisterTests | 14 | Existing Register scenarios and smoke test |
 | CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
 | CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
-| EnrollTests | 2 | ENROLL-001 authenticated enrollment, exact My Courses verification and cleanup; ENROLL-002 guest enrollment redirects to /login |
+| EnrollTests | 5 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -24,15 +24,18 @@ report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
 2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
 3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
-4. Run ENROLL-001 alone, ENROLL-002 alone, then the full EnrollTests class.
+4. Run ENROLL-004 alone, ENROLL-005 alone, TC1–TC3 alone, then the full EnrollTests class.
    CourseDetailTests still exercises the five existing Course Detail contracts independently.
 
 PowerShell, from the project root:
 
 ```powershell
 .\gradlew.bat compileJava compileTestJava
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestLoginShouldReturnToSameCourseDetail"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
@@ -41,8 +44,11 @@ the executable permission):
 
 ```sh
 bash gradlew compileJava compileTestJava
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin"
+bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests.guestLoginShouldReturnToSameCourseDetail"
 bash gradlew test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 ```
 
@@ -52,24 +58,26 @@ Run Course Detail TC2 independently with:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 36 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 39 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
-registration; their existing behavior and fixtures are preserved. ENROLL-001 also
-mutates account state and must complete its targeted cleanup before another run.
+registration; their existing behavior and fixtures are preserved. ENROLL-001, TC4
+and TC5 mutate account state and must complete their targeted cleanup before another run.
 
 ## Enrollment tests
 
-Enrollment contains two independent tests: ENROLL-001 verifies authenticated
-enrollment and its cleanup; ENROLL-002 verifies the guest redirect to `/login`.
-The v1.1.12 source audit found no contract defect requiring a TC1 or TC2 code change.
-Both implementations are preserved from local v1.1.11. Compilation and all three
-requested test runs were attempted; their actual results are in `CHANGE_REPORT.md`.
+Enrollment contains five independent tests: ENROLL-001 verifies authenticated
+enrollment, exact My Courses identity and targeted cancellation; ENROLL-002 verifies
+the guest redirect to `/login`; ENROLL-003 verifies return to the original Course
+Detail after login; ENROLL-004 verifies persistence after My Courses refresh;
+ENROLL-005 verifies persistence after real application logout and login again.
+BaseTest owns final browser/session cleanup for every test.
+See `CHANGE_REPORT.md` for the source comparison and actual validation results.
 
 ### ENROLL-001 — Successful enrollment
 
-**ENROLL-001 — Successful course enrollment**, group `enroll-tc1`, is the only
-authenticated Enrollment testcase. It uses the confirmed existing Login credentials in
+**ENROLL-001 — Successful course enrollment**, group `enroll-tc1`, covers authenticated
+enrollment. It uses the confirmed existing Login credentials in
 `data/enroll/EnrollInput`; the unrelated registration-form sample password is not used.
 Existing Login/Register source remains unchanged.
 
@@ -102,15 +110,14 @@ enrollment. It clicks Hủy khóa học only inside the unique exact-title item 
 until that same item is absent. Multiple same-title matches cause an explicit failure
 instead of an ambiguous cancellation. Other account courses are never cancelled.
 
-Application logout uses the observed `span.logout` under the avatar/account link,
-then verifies the Login control is visible and the account link is no longer displayed. Logout is
-attempted even if cancellation fails. Browser storage clearing in BaseTest remains
-additional session hygiene, not a replacement for application logout.
+EnrollmentSupport handles targeted cancellation only. BaseTest clears browser
+storage/cookies and quits Chrome after each test; application logout is not an
+Enrollment cleanup requirement.
 
-If a business assertion already failed, cleanup/logout failures are logged and added
+If a business assertion already failed, cleanup failures are logged and added
 as suppressed exceptions to that original failure. If business assertions passed but
-cleanup or logout fails, the testcase fails. Allure receives selected-course and popup
-evidence, a cleanup/logout summary, and the original failing screen before cleanup
+cleanup fails, the testcase fails. Allure receives selected-course and popup
+evidence, a cleanup summary, and the original failing screen before cleanup
 when screenshot capture is available. No Cancel Course testcase is added.
 
 ### ENROLL-002 — Guest redirect
@@ -125,8 +132,62 @@ using the existing explicit wait. Query parameters and fragments do not affect
 the path comparison; Login form fields are not inspected.
 
 TC2 performs no login, My Courses visit, enrollment-success popup check, cancellation
-or application logout. TC1 and its failure-safe cleanup are unchanged.
+or application logout. Its implementation is unchanged in this release.
+
+### ENROLL-003 — Login returns to the original Course Detail
+
+**ENROLL-003 — Login returns guest to same Course Detail**, group `enroll-tc3`,
+uses the same guest category/card path as TC2. After Detail readiness, it captures
+the actual browser URL, then clicks Đăng ký once. `waitUntilAtLoginPage()` is a
+required setup guard, not another business assertion. The test enters the existing
+EnrollInput credentials through LoginPage and submits login.
+
+Its one business assertion calls `CourseDetailPage.waitUntilAtCourseUrl(...)` with
+the captured URL. That small explicit wait reuses `sameBrowserUrl(...)`, retaining
+the project's normalized URI equality behavior. A concise completion log includes
+the original and resulting URLs; the assertion message includes the actual URL
+if the expected return times out.
+
+The test ends after confirming the return. It performs no second Đăng ký click,
+success-popup assertion, enrollment, My Courses visit, cancellation or application
+logout. It does not call EnrollmentSupport; BaseTest performs normal session teardown.
 See `CHANGE_REPORT.md` for this release's actual validation results.
+
+### ENROLL-004 — Persistence after My Courses refresh
+
+**ENROLL-004 — Enrollment persists after My Courses refresh**, group `enroll-tc4`,
+maps to **TC_ENR_008**. It independently logs in, selects one healthy Course through
+the existing category/card path, and uses `requireCourseNotEnrolled(...)` before
+clicking Đăng ký once. Existing enrollments remain untouched if this setup guard fails.
+
+The exact success title from `EnrollInput.SUCCESS_TITLE` and initial exact-title
+My Courses presence are setup guards that throw on failure. The test then calls
+`AccountPage.refreshMyCourses(expectedAccount)`: normal WebDriver refresh followed
+by the existing account-data wait and `openMyCourses(...)`. This restores the Khóa học
+tab even if refresh resets it to personal information. Its one business assertion
+verifies that the same captured `.stikerCard` title remains after refresh.
+
+### ENROLL-005 — Persistence after application logout and login
+
+**ENROLL-005 — Enrollment persists after logout and login**, group `enroll-tc5`,
+maps to **TC_ENR_009**. It independently performs the same guarded enrollment setup
+and confirms initial My Courses presence. It then reuses the unchanged
+`HomePage.logoutIfAuthenticated()`: hover the authenticated avatar, click the
+existing `span.logout` normally, and wait for the Login control with no visible
+account link. That guest-state wait is a setup guard.
+
+The test opens Login through the frontend, logs into the same EnrollInput account,
+waits for authenticated state, and reopens My Courses. Its one business assertion
+verifies that the exact selected Course remains after this session transition.
+Application logout happens once as the TC5 scenario step, never after cleanup.
+
+Both persistence tests call the shared failure-safe cleanup in `finally`. It cancels
+only the owned exact-title Course and verifies removal, preserving any primary
+failure and suppressing cleanup errors. Cleanup failure after scenario success fails
+the test. If authentication was lost after enrollment, the new overload can restore
+the same test login through Page Objects solely to perform targeted cancellation.
+It never logs out or clears browser storage. TC1 retains its existing caller and
+cancellation-only behavior; TC1–TC3 testcase implementations are unchanged.
 
 ## Course Detail TC1
 
@@ -296,15 +357,19 @@ Register and Course List test classes are outside this Enrollment release.
   Course-name/instructor comparisons, href-keyed Detail caching, source/defect models
   and consistency summary generation. It receives the current WebDriver; Page
   Objects continue to own DOM discovery and capture.
-- `EnrollTests`: two declared `@Test` methods; TC1 retains its two business assertions,
-  and TC2 has one redirect assertion. No helpers, nested types, raw locators or DOM parsing.
+- `EnrollTests`: five declared `@Test` methods; TC1 has two business assertions,
+  TC2 has one Login-redirect assertion, TC3 one return-URL assertion, and TC4/TC5
+  one persistence assertion each. Their enrollment/session prerequisites are setup guards.
+  No helpers, nested types, raw locators or DOM parsing.
 - `LoginPage.waitUntilAtLoginPage`: explicit wait for the `/login` URL path only.
-- `AccountPage`: account-data readiness, My Courses selection, exact-title lookup
-  and cancellation/removal of only the selected course.
+- `CourseDetailPage.waitUntilAtCourseUrl`: explicit wait reusing `sameBrowserUrl`.
+- `AccountPage`: account-data readiness, My Courses selection/refresh, exact-title
+  lookup and cancellation/removal of only the selected course.
 - `HomePage`, `CourseCategoryPage`, `CourseDetailPage`: additive header/category
   navigation, Enrollment selection and popup operations; existing methods are preserved.
-- `EnrollmentSupport`: failure-safe cleanup/logout orchestration, evidence and error
-  preservation. Page Objects own the application interactions.
+- `EnrollmentSupport`: failure-safe targeted cancellation, evidence and error
+  preservation with testcase-specific labels; optional login recovery for the
+  persistence scenarios. BaseTest owns final browser/session cleanup.
 - `EnrollInput`: the small Enrollment credential/expected-message holder.
 - `CourseCardDomReader`: reused card parsing; existing Course List calls retain their
   behavior.
@@ -314,9 +379,11 @@ Register and Course List test classes are outside this Enrollment release.
 
 Course Detail was added locally in v1.1.5 and its support architecture was established
 in v1.1.9. Enrollment TC1 was added in v1.1.10 and TC2 in local v1.1.11.
-The v1.1.12 audit delivery uses that newer local baseline; inspected GitHub main
-still reports v1.1.10. All Java source files, including both Enrollment tests,
-their Page Objects and support flow, remain unchanged from v1.1.11.
+TC3 and cancellation-only cleanup are present in local v1.1.13. This release adds
+only TC4/TC5 to that inspected baseline; GitHub main still reports v1.1.10.
+TC1–TC3 methods and all existing Course Detail members are preserved. AccountPage
+gains one refresh operation; HomePage gains authentication-state detection and
+allows login recovery when already on `/login`. Its existing logout method is unchanged.
 Dependency versions are unchanged.
 
 ## Allure and results

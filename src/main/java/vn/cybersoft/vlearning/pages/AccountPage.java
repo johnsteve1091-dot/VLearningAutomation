@@ -49,6 +49,11 @@ public class AccountPage extends BasePage {
         return this;
     }
 
+    public AccountPage refreshMyCourses(String expectedAccount) {
+        driver.navigate().refresh();
+        return openMyCourses(expectedAccount);
+    }
+
     /** Read-only setup guard: never take ownership of an existing account course. */
     public void requireCourseNotEnrolled(String courseName) {
         requireName(courseName);

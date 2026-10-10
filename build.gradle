@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'vn.cybersoft.vlearning'
-version = '1.1.12'
+version = '1.1.14'
 
 repositories {
     mavenCentral()
