@@ -49,6 +49,11 @@ public class AccountPage extends BasePage {
         return this;
     }
 
+    public AccountPage refreshMyCourses(String expectedAccount) {
+        driver.navigate().refresh();
+        return openMyCourses(expectedAccount);
+    }
+
     /** Read-only setup guard: never take ownership of an existing account course. */
     public void requireCourseNotEnrolled(String courseName) {
         requireName(courseName);
@@ -70,6 +75,21 @@ public class AccountPage extends BasePage {
         } catch (TimeoutException courseNotVisible) {
             return false;
         }
+    }
+
+    /** Observable count for duplicate enrollment; does not reject multiple matches. */
+    public int countExactCourseItems(String courseName) {
+        requireName(courseName);
+        waitUntilVisible(MY_COURSES_PANEL);
+        String expected = normalize(courseName);
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            int count = 0;
+            for (WebElement item : currentDriver.findElements(MY_COURSE_ITEMS)) {
+                if (item.findElements(COURSE_TITLE).stream().anyMatch(title -> title.isDisplayed()
+                        && expected.equals(normalize(title.getText())))) count++;
+            }
+            return count;
+        });
     }
 
     /** Cancels only a unique exact-title match and waits for that DOM item to disappear. */

@@ -123,6 +123,16 @@ public class CourseDetailPage extends BasePage {
         click(REGISTER_BUTTON);
     }
 
+    public boolean waitUntilAtCourseUrl(String expectedUrl) {
+        try {
+            return getWait().until(currentDriver ->
+                    sameBrowserUrl(expectedUrl, currentDriver.getCurrentUrl())
+            );
+        } catch (TimeoutException courseUrlNotReached) {
+            return false;
+        }
+    }
+
     public String waitForEnrollmentPopupTitle() {
         return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
             for (WebElement title : currentDriver.findElements(ENROLLMENT_DIALOG_TITLE)) {

@@ -1,204 +1,183 @@
-# VLearningAutomation v1.1.10 — Enrollment TC1
+# VLearningAutomation — v1.1.15
 
-## Source of truth and version
+## Baseline comparison
 
-GitHub main was inspected before implementation. Commit/tree
-`853db432d2a49c8b75b683b7e4aab9774b2a6596` reports **1.1.4** and lacks the
-current Course Detail implementation. The current local project reports **1.1.9**.
-All 38 local files matched the previously delivered v1.1.9 ZIP before work began;
-an untouched baseline and SHA-256 manifest were retained for comparison.
+Fresh GitHub main was inspected first, followed by the current local project.
+GitHub still reports **v1.1.10**, tree
+`411ea3f139739f72ec1b5011e73255a51de45f35`, with ENROLL-001 only.
+Local **v1.1.14** contains ENROLL-001–005, guest redirect/return, refresh
+persistence, and application logout/login persistence. Its 42 files matched the
+previous v1.1.14 delivery ZIP byte for byte.
 
-The GitHub/local comparison found 27 identical shared files, six different shared
-files, and five local-only Course Detail files. The local-only files are
-CourseDetailPage, CourseDetailTests and the three CourseDetail support classes.
-The different shared files are build.gradle, README.md, CHANGE_REPORT.md,
-CourseCardDomReader, CourseSubCardContentSupport and testng.xml.
-The newer local implementation is the source of truth; it was not rebuilt from GitHub.
+Nine local files differ from GitHub: build.gradle, README, CHANGE_REPORT,
+AccountPage, CourseDetailPage, HomePage, LoginPage, EnrollmentSupport and
+EnrollTests. The other 33 files match GitHub; neither side has additional files.
+The current local version was authoritative. No older GitHub source replaced it.
 
-**Exactly one patch increment: 1.1.9 → 1.1.10.** Dependency versions and the Java
-requirement are unchanged. No GitHub push was made.
+Project version increments once: **1.1.14 → 1.1.15**. Dependency, Wrapper,
+Java 26 and Allure versions remain unchanged.
 
-## Functional scope
+## ENROLL-006 — Same Course twice
 
-Exactly one functional TestNG method was added:
-**ENROLL-001 — Successful course enrollment**, group `enroll-tc1`.
-The suite now contains **35 methods**: Login 5, Register 14, Course List 10,
-Course Detail 5 and Enrollment 1. Cancellation is cleanup within ENROLL-001;
-there is no Cancel Course suite or additional Enrollment scenario.
+Maps **TC_ENR_010 + TC_ENR_011**. The test logs in using existing EnrollInput
+credentials, selects one healthy rendered Course through the existing first
+category/card path, and captures its category, href and normalized stikerCard name.
+The read-only My Courses absence guard runs before acquiring ownership.
 
-The test uses the existing confirmed Login account through the existing Login
-Page Object. Those credentials are currently inline in LoginTests, so the small
-EnrollInput holder supplies them for Enrollment without changing Login/Register
-behavior. RegisterInput's registration-form sample password is not used.
+The first enrollment's exact success title and initial My Courses presence are
+setup guards. The test returns through the captured category to the same card,
+clicks Đăng ký a second time and performs exactly two business assertions:
 
-The flow is:
+1. The generic popup reader returns **`Đã đăng ký khóa học này rồi!`**,
+   centralized as `EnrollInput.DUPLICATE_TITLE`.
+2. After the popup closes, `AccountPage.countExactCourseItems(name)` returns
+   exactly **1**.
 
-1. Log in and wait for the authenticated account header.
-2. Use existing category discovery and normal Danh mục menu navigation to open
-   the first category. Stop at the first usable rendered card with a nonblank
-   `span.stikerCard` name and a same-site Detail href containing a course path.
-3. Retain its category URL, href and displayed name as strings. Make a read-only
-   My Courses visit to establish that this exact name is absent before enrollment.
-   If it already exists, fail setup and leave it untouched.
-4. Return through the same category menu, find the captured card by href/name and
-   click its main image. Wait for the advertised Detail URL, visible Detail root
-   and clickable existing enrollment button. No course or category ID is hardcoded.
-5. Mark the enrollment attempt before clicking Đăng ký, then capture the visible
-   SweetAlert title. Business assertion A checks exactly **`Đăng kí thành công`**,
-   with `kí` and no period.
-6. Wait for the popup to close, open the account through its avatar link, and
-   open Khóa học. Business assertion B requires one visible My Courses item whose
-   h6 matches the captured `stikerCard` name after whitespace normalization.
-7. In `finally`, cancel only that exact-title item if present, verify its removal,
-   and perform real application logout.
+The new count operation uses exact normalized visible h6 title text inside the
+existing My Courses item locator. It returns duplicate counts rather than throwing
+the unique-match cleanup guard. Whitespace/NBSP are normalized; case, accents and
+quotes remain meaningful. It does not count unrelated items or build dynamic XPath.
+The existing enrollment button, popup reader and explicit popup-close wait are reused;
+CourseDetailPage is unchanged. Duplicate body text is not asserted.
 
-The pre-enrollment absence guard allows cleanup after a failed popup assertion:
-the server may have accepted the request even when the success message is wrong.
-It also prevents cleanup from taking ownership of a pre-existing enrollment.
-There is no startup mass-cancellation, pagination, category sweep, API call,
-course crawling or fallback loop that conceals a broken candidate.
+## ENROLL-007 — Two different Courses together
 
-## Architecture and DOM grounding
+Maps **TC_ENR_006** and enrolls **two Courses**, A and B.
+A's absence guard precedes its attempt. Both success titles are setup guards.
+B is checked independently for pre-existing enrollment before its own attempt;
+A is expected to be enrolled by then.
 
-EnrollTests is **84 source lines**, with **one directly declared method**, one
-`@Test`, zero helper methods and zero nested types. It contains two business
-assertions, high-level orchestration and `try/catch/finally`; it contains no By
-locators, XPath, DOM parsing or browser element operations.
+CourseCategoryPage's existing first-course selector delegates to one shared card
+selection implementation. The new distinct-course operation applies the same
+visible-card, valid Detail href and nonblank visible stikerCard rules, skipping A's
+normalized href and title. A different title is also necessary because My Courses
+provides names rather than useful IDs.
 
-| Class | Responsibility |
+HomePage tries the same rendered category, then at most the first other discovered
+category. Selection stops at the first usable B. No pagination, fixed course
+identity, direct navigation shortcut, API or catalog sweep was added.
+The bounded search fails setup clearly if no unambiguous distinct B is found;
+it makes no claim to inspect every category.
+
+After B succeeds and the popup closes, exactly two business assertions verify
+exact A presence and exact B presence in the same My Courses state.
+
+## Ownership, cleanup and preservation
+
+TC6 sets its attempt flag immediately before the first enrollment click, after
+the absence guard. TC7 appends each exact name to its owned list immediately before
+that Course's click, after its respective absence guard. Thus accepted requests
+can still be cleaned when a response, setup guard or business assertion fails.
+Names selected but not attempted never become owned.
+
+EnrollmentSupport now accepts a list of owned names and tries each cleanup
+independently. A failure cancelling or verifying removal of A does not skip B.
+The existing unique exact-title cancellation and removal verification remain
+unchanged. Pre-existing, similarly named and unrelated Courses are never cancelled.
+
+Original failures remain primary; independent cleanup/evidence failures are
+suppressed on them. Cleanup failure after scenario success fails the testcase.
+Logs and one compact cleanup attachment identify each Course and its outcome.
+A failure screenshot is retained before cancellation where available.
+
+If a duplicate-enrollment defect creates multiple exact-title items, TC6 can
+observe count 2. Existing cleanup deliberately refuses ambiguous cancellation,
+preserves the count assertion and reports cleanup failure. This is a safety
+limitation, not a live product-defect finding from this environment.
+
+**EnrollmentSupport performs no login, logout, cookie/storage clearing or driver
+quit.** BaseTest retains final browser/session teardown.
+
+The actual v1.1.14 support helper contained optional login recovery for TC4/TC5,
+which conflicts with the new no-login support requirement. Recovery was moved
+to the existing `LoginSupport.restoreSessionForCleanup(...)` operation.
+Only TC4/TC5's `finally` orchestration changed to call that operation before
+cancellation and preserve restoration errors. Their annotations and scenario
+code before `finally` remain byte-for-byte unchanged. TC5 still performs real
+application logout once as its scenario step, and can restore its session for
+owned-course cancellation after a failed second login.
+
+TC1–TC3 complete declarations and bodies remain byte-for-byte unchanged.
+Existing AccountPage methods, HomePage.logoutIfAuthenticated, LoginPage,
+CourseDetailPage, BaseTest, credentials and testng.xml are preserved.
+EnrollTests has **seven direct methods, all @Test**, with no helpers, nested
+types, raw locators, DOM parsing or URL-normalization logic added.
+The complete project now has **41 TestNG methods**.
+
+## Files changed
+
+**New project files: none.** Ten files modified relative to local v1.1.14:
+
+| File | Change |
 | --- | --- |
-| EnrollTests | One business flow, two assertions and delegation to final cleanup |
-| EnrollInput | Minimal existing-account credentials and exact success-title expectation |
-| EnrollmentSupport | Cleanup/logout orchestration, evidence and preservation of the primary failure |
-| AccountPage | Account readiness, My Courses tab, exact-title matching, scoped cancellation and removal wait |
-| HomePage additions | Normal category navigation, authenticated account navigation and application logout |
-| CourseCategoryPage additions | Capture one `stikerCard` identity and reopen that same card |
-| CourseDetailPage additions | Reuse the existing enroll button; wait/click/capture the SweetAlert lifecycle |
+| `src/test/java/vn/cybersoft/vlearning/tests/EnrollTests.java` | TC6/TC7; necessary TC4/TC5 cleanup recovery relocation |
+| `src/test/java/vn/cybersoft/vlearning/data/enroll/EnrollInput.java` | Exact current duplicate title constant |
+| `src/test/java/vn/cybersoft/vlearning/data/enroll/EnrollmentSupport.java` | Independently clean owned Course names; remove login |
+| `src/test/java/vn/cybersoft/vlearning/data/login/LoginSupport.java` | Existing TC4/TC5 login recovery moved here |
+| `src/main/java/vn/cybersoft/vlearning/pages/AccountPage.java` | Observable exact visible-title item count |
+| `src/main/java/vn/cybersoft/vlearning/pages/CourseCategoryPage.java` | Shared selector with distinct-course exclusion |
+| `src/main/java/vn/cybersoft/vlearning/pages/HomePage.java` | Bounded same/one-other-category selection |
+| `build.gradle` | Project version only |
+| `README.md` | Enrollment cases, mappings, counts, run order and version |
+| `CHANGE_REPORT.md` | This delivery and actual validation |
 
-The supplied DOM and original screenshots ground the Detail enrollment button,
-SweetAlert, account link, My Courses structures and scoped cancellation button.
-The authenticated-header screenshot shows `img.avatar` and `span.logout` beneath
-`a.infoHeader[href='/thongtincanhan']`; logout uses that observed control.
-The account screenshot also grounds the `#infoPersonal` account field used as a
-data-readiness check before accepting an empty My Courses tab.
+The other **32 project files are byte-for-byte unchanged**. Unrelated README
+Course Detail, Course List and Allure sections remain unchanged.
 
-Public browser inspection confirmed `li.courseCate`, the existing category links,
-the direct card image, `span.stikerCard`, and the selected card's Detail root and
-Đăng ký button. Only the public category → card → Detail path was inspected;
-no live account login, enrollment, cancellation or logout was performed.
+## Actual validation — 2026-10-10
 
-The existing CourseCardDomReader remains unchanged. Enrollment uses the observed
-`stikerCard` title separately instead of reinterpreting the legacy h6 content.
-Course names are compared as normalized Java strings; accents, case, apostrophes
-and quotation marks are preserved. No name is interpolated into XPath.
-
-All waits use the existing explicit-wait infrastructure. No sleeps, implicit
-waits, custom retry frameworks, listeners or DataProviders were added.
-The supplied success popup has no dismiss button; its disappearance is awaited.
-
-## Cleanup and failure handling
-
-Cleanup runs after an enrollment attempt even if a later assertion fails. It
-reacquires the selected course by exact normalized title, clicks Hủy khóa học
-inside that item only, and waits until no matching item remains in the active
-My Courses panel. An already-absent item causes no cancellation. Multiple matches
-are an explicit ambiguity failure; an existing but hidden match is not reported
-as successful removal. Similarly named or unrelated items are left untouched.
-
-Logout is attempted independently even if cancellation fails. The Page Object
-clicks the observed logout control and waits until Login is visible and the
-authenticated account link is no longer displayed. BaseTest's existing storage
-cleanup does not replace application logout.
-
-When a business/setup failure already exists, cleanup/logout errors are logged
-and added as suppressed exceptions to that original failure. When business
-assertions pass but cleanup or logout fails, the test fails. Failure evidence is
-captured before cleanup when screenshots are available, so later navigation does
-not erase the original failing screen.
-
-Allure calls attach the selected category/href/name, actual popup title,
-cleanup/logout summary and optional pre-cleanup failure screenshot. These calls
-are implemented; this environment produced no new live TestNG/Allure results.
-
-## Exact file scope
-
-Created:
-
-1. `src/main/java/vn/cybersoft/vlearning/pages/AccountPage.java`
-2. `src/test/java/vn/cybersoft/vlearning/data/enroll/EnrollInput.java`
-3. `src/test/java/vn/cybersoft/vlearning/data/enroll/EnrollmentSupport.java`
-4. `src/test/java/vn/cybersoft/vlearning/tests/EnrollTests.java`
-
-Modified:
-
-1. `src/main/java/vn/cybersoft/vlearning/pages/HomePage.java`
-2. `src/main/java/vn/cybersoft/vlearning/pages/CourseCategoryPage.java`
-3. `src/main/java/vn/cybersoft/vlearning/pages/CourseDetailPage.java`
-4. `src/test/resources/testng.xml` — include EnrollTests once and update the label.
-5. `build.gradle` — project version only.
-6. `README.md` — version, run instructions, Enrollment behavior and responsibilities.
-7. `CHANGE_REPORT.md` — this release report.
-
-The other **31 original files are byte-for-byte unchanged**, including all four
-existing test classes, all three CourseDetail support classes, Login/Register
-Page Objects, shared card readers, base classes, Wrapper files and logging
-configuration. AST comparison confirms that all original declared members of
-HomePage (11), CourseCategoryPage (8) and CourseDetailPage (87) are unchanged;
-their Enrollment behavior is additive. Existing Course Detail locators and
-TC1–TC5 contracts are preserved.
-
-The ZIP contains **42 project files, including 29 Java files**, under one
-`VLearningAutomation` folder. Temporary verification programs, fixture stubs,
-reconnaissance images, crash logs, build output and IDE caches are excluded.
-
-## Validation performed — 2026-10-07
-
-The requested commands were attempted in this order, with EnrollTests as the
-only selected functional test class:
+All nine requested commands were attempted sequentially:
 
 ```sh
 bash gradlew compileJava compileTestJava --console=plain --no-daemon
+bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.duplicateEnrollmentShouldBePrevented --console=plain --no-daemon
+bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.differentCoursesShouldCoexistInMyCourses --console=plain --no-daemon
+bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses --console=plain --no-daemon
+bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin --console=plain --no-daemon
+bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.guestLoginShouldReturnToSameCourseDetail --console=plain --no-daemon
+bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh --console=plain --no-daemon
+bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin --console=plain --no-daemon
 bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests --console=plain --no-daemon
 ```
 
-Both exited **1 before any Gradle task started**. The Wrapper could not download
-`https://downloads.gradle.org/distributions/gradle-9.7.1-bin.zip` and reported
-`java.net.SocketException: Network is unreachable`.
-The available environment is Java **17.0.20**; the project's requirement remains
-Java **26**. No dependency or Java version was downgraded to work around this.
+Every command exited **1 before any Gradle task started**. The Wrapper could not
+download `https://downloads.gradle.org/distributions/gradle-9.7.1-bin.zip`,
+reporting `java.net.SocketException: Network is unreachable`.
+The environment's default Java is **17.0.20**; the project's **Java 26**
+requirement was retained.
 
-| Requested result | Actual outcome |
+| Requested check | Actual result |
 | --- | --- |
-| Production/test compilation | Blocked during Gradle bootstrap; no real build verdict |
-| ENROLL-001 | Not executed; no PASS/FAIL application result |
-| Runtime TestNG discovery | Not reached |
-| Selected course removed afterward | Not verified live; no enrollment was made here |
-| Application logout completed | Not verified live; no authenticated test session ran |
-| Genuine application defect | No verdict from ENROLL-001 because it did not execute |
-| Allure runtime report | No new report/evidence generated by ENROLL-001 |
+| Production/test compilation | Attempted; blocked during Gradle bootstrap |
+| ENROLL-006 alone | Attempted; no TestNG/live duplicate-enrollment verdict |
+| ENROLL-007 alone | Attempted; no TestNG/live two-course verdict |
+| ENROLL-001 alone | Present; attempted; no TestNG execution |
+| ENROLL-002 alone | Present; attempted; no TestNG execution |
+| ENROLL-003 alone | Present; attempted; no TestNG execution |
+| ENROLL-004 alone | Present; attempted; no TestNG execution |
+| ENROLL-005 alone | Present; attempted; no TestNG execution |
+| Full EnrollTests | Attempted; no TestNG execution |
+| Live exact cancellation/removal | Not reached |
+| Chrome and Allure runtime | Not reached |
+| Live Course B availability / duplicate popup close | Unverified |
+| Product defect | No live verdict; no account state was changed |
 
-Available offline checks completed:
+All **29 Java sources passed syntax parsing**, including direct Course Detail
+XPath compilation. AST/file checks verify test-only architecture, unchanged TC1–TC3,
+TC4/TC5 preservation before their finalizers, exact assertion counts, additive
+Page Object changes and unchanged dependencies/unrelated files.
 
-- All 29 Java sources parsed successfully; 34 existing direct Course Detail XPath
-  expressions also compiled. This is syntax validation, not dependency resolution
-  or Java 26 compilation.
-- An isolated Java fixture compiled the new Enrollment slice against temporary
-  Selenium/TestNG/Allure/logging API stubs. Existing dependencies were stubbed;
-  new CourseDetail method bodies were extracted into an isolated facade. This
-  does not establish compatibility with the real dependency versions or compile
-  the complete production/test project.
-- Thirteen isolated safety assertions passed: quoted/NBSP name matching; exact
-  target-only cancellation; removal detection; refusal of pre-existing and
-  ambiguous matches; absent-target safety; failed-removal detection; successful
-  cleanup/logout orchestration; preservation of the primary assertion with
-  suppressed cleanup/logout errors; failure after otherwise successful business
-  assertions when cleanup fails; logout failure reporting; no cancellation before
-  an enrollment attempt; and evidence-failure preservation of the primary error.
-  Fixtures use fake DOM objects and do not verify real browser wait timing.
-- File hashes, AST member comparisons, method counts, the two-assertion structure,
-  suite inclusion and the final baseline diff were checked.
+An isolated dependency-stub slice compiled and passed **23 offline safety checks**.
+It exercised actual EnrollTests, AccountPage, HomePage, CourseCategoryPage,
+EnrollmentSupport and LoginSupport using fake browser/framework dependencies.
+Checks covered duplicate count 2, exact visible quoted/normalized titles, shared
+healthy-card selection, bounded B fallback, ownership before clicks, pre-existing
+Course protection, partial enrollment, independent A/B cleanup, missing removal,
+primary-error preservation, TC1 compatibility and TC4/TC5 scenario/recovery behavior.
 
-These offline results are not an ENROLL-001 PASS. Full validation still requires
-JDK 26, Chrome and access to the configured Gradle distribution/dependencies or
-a compatible populated cache. Run only EnrollTests first and inspect its cleanup
-and logout evidence before reporting a successful end-to-end result.
+These results are **not** project dependency/type compilation, Java 26 compilation,
+Selenium/TestNG/Allure runtime execution or live-site PASS results.
+The ZIP contains 42 project files under one VLearningAutomation folder. Offline
+fixtures, logs, caches and build output are excluded. Archive CRC and source-byte
+matching were verified. README includes the live-validation commands for an
+environment with JDK 26, Chrome and required downloads.

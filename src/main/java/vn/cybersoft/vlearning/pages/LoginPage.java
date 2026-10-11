@@ -7,6 +7,7 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
+import java.net.URI;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
@@ -172,6 +173,16 @@ public class LoginPage extends BasePage {
     public RegisterPage goToRegisterPage() {
         click(REGISTER_BUTTON);
         return new RegisterPage(driver);
+    }
+
+    public boolean waitUntilAtLoginPage() {
+        try {
+            return getWait().until(currentDriver ->
+                    "/login".equals(URI.create(currentDriver.getCurrentUrl()).getPath())
+            );
+        } catch (TimeoutException loginRouteNotReached) {
+            return false;
+        }
     }
 
     public boolean waitUntilLoggedIn() {

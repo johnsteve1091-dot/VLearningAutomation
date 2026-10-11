@@ -3,6 +3,7 @@ package vn.cybersoft.vlearning.data.enroll;
 import io.qameta.allure.Allure;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
@@ -15,7 +16,7 @@ import vn.cybersoft.vlearning.pages.AccountPage;
 import vn.cybersoft.vlearning.pages.CourseDetailPage;
 import vn.cybersoft.vlearning.pages.HomePage;
 
-/** Failure-safe ENROLL-001 hygiene; Page Objects own every browser operation. */
+/** Failure-safe exact-course cancellation; BaseTest owns final browser/session cleanup. */
 public final class EnrollmentSupport {
 
     private static final Logger LOGGER = LogManager.getLogger(EnrollmentSupport.class);
@@ -25,58 +26,57 @@ public final class EnrollmentSupport {
 
     public static void finish(WebDriver driver, String account, String courseName,
                               boolean enrollmentAttempted, Throwable primaryFailure) {
-        List<Throwable> failures = new ArrayList<>();
-        String cancellation = "Not required: enrollment was not attempted.";
-        String logout = "Not attempted.";
+        finish(driver, "ENROLL-001", account, courseName, enrollmentAttempted, primaryFailure);
+    }
 
-        // BaseTest captures after this finally block. Preserve the original failing
-        // screen now, before cancellation and logout change the UI.
+    public static void finish(WebDriver driver, String testCaseId, String account,
+                              String courseName, boolean enrollmentAttempted, Throwable primaryFailure) {
+        finish(driver, testCaseId, account,
+                enrollmentAttempted ? List.of(courseName) : List.of(), primaryFailure);
+    }
+
+    /** Names enter this collection only after the absence guard, immediately before an attempt. */
+    public static void finish(WebDriver driver, String testCaseId, String account,
+                              List<String> ownedCourseNames, Throwable primaryFailure) {
+        List<Throwable> failures = new ArrayList<>();
+        StringBuilder cancellation = new StringBuilder();
+
+        // BaseTest captures after this finally block. Preserve the failing screen
+        // before cancellation changes the UI.
         if (primaryFailure != null && driver instanceof TakesScreenshot screenshotDriver) {
             try {
-                Allure.addAttachment("ENROLL-001 failure before cleanup", "image/png",
+                Allure.addAttachment(testCaseId + " failure before cleanup", "image/png",
                         new ByteArrayInputStream(screenshotDriver.getScreenshotAs(OutputType.BYTES)), ".png");
             } catch (RuntimeException evidenceFailure) {
-                primaryFailure.addSuppressed(evidenceFailure);
-                LOGGER.warn("ENROLL-001 | Could not capture the failure before cleanup", evidenceFailure);
+                failures.add(evidenceFailure);
+                LOGGER.warn("{} | Could not capture the failure before cleanup", testCaseId, evidenceFailure);
             }
         }
 
-        try {
-            if (enrollmentAttempted) {
-                // The pre-enrollment absence guard establishes ownership even if
-                // the request succeeds but the success-popup assertion later fails.
+        if (ownedCourseNames.isEmpty()) {
+            cancellation.append("Not required: no enrollment was attempted.\n");
+        }
+        for (String courseName : new LinkedHashSet<>(ownedCourseNames)) {
+            String result;
+            try {
+                // Attempt every owned course independently, including after another cleanup failure.
                 new CourseDetailPage(driver).waitUntilEnrollmentPopupClosed();
                 AccountPage accountPage = new HomePage(driver).goToAccountPage().openMyCourses(account);
-                cancellation = accountPage.cancelCourseIfPresent(courseName)
-                        ? "Selected Course cancelled; exact-title item removal verified."
-                        : "Selected Course is absent; no cancellation was necessary.";
+                result = accountPage.cancelCourseIfPresent(courseName)
+                        ? "Cancelled; exact-title item removal verified."
+                        : "Absent; no cancellation was necessary.";
+            } catch (RuntimeException | AssertionError cleanupFailure) {
+                failures.add(cleanupFailure);
+                result = "FAILED: " + cleanupFailure;
+                LOGGER.warn("{} | Owned-Course cleanup failed | course=\"{}\"", testCaseId, courseName, cleanupFailure);
             }
-        } catch (RuntimeException | AssertionError cleanupFailure) {
-            failures.add(cleanupFailure);
-            cancellation = "FAILED: " + cleanupFailure;
-            LOGGER.warn("ENROLL-001 | Selected-Course cleanup failed", cleanupFailure);
+            LOGGER.info("{} CLEANUP | course=\"{}\" | cancellation={}", testCaseId, courseName, result);
+            cancellation.append("Course: ").append(courseName).append("\nCancellation: ").append(result).append('\n');
         }
 
-        // Always attempt application logout, including after cancellation failure.
         try {
-            new CourseDetailPage(driver).waitUntilEnrollmentPopupClosed();
-            logout = new HomePage(driver).logoutIfAuthenticated()
-                    ? "Application logout completed; Login visible and account link absent."
-                    : "Already unauthenticated; Login visible.";
-        } catch (RuntimeException | AssertionError logoutFailure) {
-            failures.add(logoutFailure);
-            logout = "FAILED: " + logoutFailure;
-            LOGGER.warn("ENROLL-001 | Application logout failed", logoutFailure);
-        }
-
-        LOGGER.info("ENROLL-001 CLEANUP | course=\"{}\" | cancellation={} | logout={}",
-                courseName, cancellation, logout);
-        try {
-            Allure.addAttachment("ENROLL-001 cleanup and logout", "text/plain",
-                    "Selected Course: " + (courseName == null ? "<not selected>" : courseName)
-                            + "\nEnrollment attempted: " + enrollmentAttempted
-                            + "\nCancellation: " + cancellation + "\nLogout: " + logout
-                            + "\nBusiness assertions: " + (primaryFailure == null ? "passed" : "failed") + "\n", ".txt");
+            Allure.addAttachment(testCaseId + " cleanup", "text/plain",
+                    cancellation + "Scenario: " + (primaryFailure == null ? "passed" : "failed") + "\n", ".txt");
         } catch (RuntimeException evidenceFailure) {
             failures.add(evidenceFailure);
         }
@@ -84,7 +84,7 @@ public final class EnrollmentSupport {
         if (primaryFailure != null) {
             failures.forEach(primaryFailure::addSuppressed);
         } else if (!failures.isEmpty()) {
-            AssertionError hygieneFailure = new AssertionError("ENROLL-001 business assertions passed, but cleanup/logout/evidence failed.");
+            AssertionError hygieneFailure = new AssertionError(testCaseId + " scenario passed, but cleanup/evidence failed.");
             failures.forEach(hygieneFailure::addSuppressed);
             throw hygieneFailure;
         }
