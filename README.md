@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.15
+# VLearningAutomation — v1.1.16
 
-Cybersoft V Learning Selenium capstone. The active source contains **41 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **45 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -10,6 +10,7 @@ methods**:
 | CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
 | CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
 | EnrollTests | 7 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence; ENROLL-006 duplicate protection; ENROLL-007 two distinct courses |
+| AccountTests | 4 | ACCOUNT-001 authenticated navigation; ACCOUNT-002 newly registered profile; ACCOUNT-003 Edit Profile controls; ACCOUNT-004 input retention without submission |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -24,8 +25,8 @@ report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
 2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
 3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
-4. Run ENROLL-006 alone, ENROLL-007 alone, TC1–TC5 alone, then the full EnrollTests class.
-   CourseDetailTests still exercises the five existing Course Detail contracts independently.
+4. Run each Account method independently, then AccountTests, EnrollTests and the
+   full suite. Existing Course Detail and Enrollment scenarios remain available below.
 
 PowerShell, from the project root:
 
@@ -62,11 +63,61 @@ Run Course Detail TC2 independently with:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 41 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 45 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
 registration; their existing behavior and fixtures are preserved. ENROLL-001, TC4,
 TC5, TC6 and TC7 mutate account state and must complete targeted cleanup before another run.
+
+## Account tests
+
+Account adds four independent methods in `AccountTests`; each starts with the fresh
+Homepage browser supplied by BaseTest. The existing Enrollment account is used only
+for ACCOUNT-001, ACCOUNT-003 and ACCOUNT-004.
+
+| Test | Behavior and assertions |
+| --- | --- |
+| ACCOUNT-001 | Login, click the header avatar, verify `/thongtincanhan`, visible `section.infoPage`, active visible Personal Information panel, and the authenticated username. |
+| ACCOUNT-002 | Generate one unique account/email pair with the unchanged RegisterSupport randomizers. Register with existing valid fixtures and GP01, verify success, explicitly log in with that new account's registration password, and compare all six profile values: username, email, full name, phone, group and `Học viên`. |
+| ACCOUNT-003 | Click available Cập nhật, verify visible Edit Profile modal, exact heading, four visible enabled inputs and observed markup types, and displayed Hoàn thành/Đóng buttons. No data entry or submit. |
+| ACCOUNT-004 | Enter valid fixtures and one generated email, compare input DOM values and password match/masking booleans, then verify the modal closes through the confirmed header dismiss button. Never click Hoàn thành or submit. |
+
+Profile values are read by their associated labels inside the active Personal
+Information section. Whitespace/NBSP are normalized; case, accents, punctuation
+and leading phone zeros remain meaningful. Readers wait for the expected user's
+populated response. Sidebar identity, learning statistics and My Courses are outside
+these Account cases. The raw phone markup is `type="phone"`; browsers expose its
+unsupported type property as `text`, so ACCOUNT-003 reads the DOM attribute.
+
+ACCOUNT-002 keeps its own generated inputs and does not use cross-test static
+registration storage. If registration authenticates automatically, the existing
+application logout runs before explicit login. The expected Group must be available
+and selected; setup fails before registration otherwise. The success-dialog close
+wait and normal Register-to-Login overlay button are small additions to RegisterPage.
+A created account persists because no verified deletion workflow exists.
+
+ACCOUNT-004 checks masking before typing and exposes no raw password in snapshots,
+assertion messages, logs or custom attachments. The header dismiss button is confirmed
+as `type="button"` with `data-dismiss="modal"`, so dismissal does not submit the form.
+BaseTest retains normal session cleanup and browser quit for all four cases.
+
+PowerShell, from the project root:
+
+```powershell
+.\gradlew.bat compileJava compileTestJava
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.accountPageShouldOpenAfterLogin"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.newlyRegisteredAccountShouldShowCorrectProfile"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.updateProfileModalShouldOpen"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.updateProfileInputsShouldAcceptValues"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
+.\gradlew.bat test
+```
+
+On Linux/macOS, replace `.\gradlew.bat` with `bash gradlew`. This delivery's Gradle
+compilation and browser runs were **blocked at Wrapper download**; none of the new
+Account cases has a live PASS from this environment. See `CHANGE_REPORT.md` for the
+actual errors and the separate static/offline checks.
 
 ## Enrollment tests
 
@@ -402,14 +453,18 @@ Register and Course List test classes are outside this Enrollment release.
   Course-name/instructor comparisons, href-keyed Detail caching, source/defect models
   and consistency summary generation. It receives the current WebDriver; Page
   Objects continue to own DOM discovery and capture.
-- `EnrollTests`: five declared `@Test` methods; TC1 has two business assertions,
+- `EnrollTests`: seven declared `@Test` methods; TC1 has two business assertions,
   TC2 has one Login-redirect assertion, TC3 one return-URL assertion, and TC4/TC5
-  one persistence assertion each. Their enrollment/session prerequisites are setup guards.
+  one persistence assertion each. TC6 checks the duplicate popup and exact count; TC7
+  checks both selected Courses. Their enrollment/session prerequisites are setup guards.
   No helpers, nested types, raw locators or DOM parsing.
 - `LoginPage.waitUntilAtLoginPage`: explicit wait for the `/login` URL path only.
 - `CourseDetailPage.waitUntilAtCourseUrl`: explicit wait reusing `sameBrowserUrl`.
-- `AccountPage`: account-data readiness, My Courses selection/refresh, exact-title
-  lookup and cancellation/removal of only the selected course.
+- `AccountTests`: exactly four independent direct `@Test` methods with scenario
+  orchestration, assertions, compact logs and non-secret evidence; no helpers or locators.
+- `AccountPage`: labeled personal-information snapshots, Account route/readiness,
+  scoped Edit Profile controls, input DOM values and safe dismissal. Every existing
+  My Courses selection/refresh, exact-title lookup and cancellation member is preserved.
 - `HomePage`, `CourseCategoryPage`, `CourseDetailPage`: additive header/category
   navigation, Enrollment selection and popup operations; existing methods are preserved.
 - `EnrollmentSupport`: failure-safe targeted cancellation, evidence and error
@@ -420,16 +475,16 @@ Register and Course List test classes are outside this Enrollment release.
   behavior.
 - `CourseSubCardContentSupport.courseNamesMatch`: existing ellipsis-aware Course-name
   comparison reused without changing its algorithm.
-- Existing Login/Register pages, data/support classes and tests remain unchanged.
+- `RegisterPage`: additive success-dialog close wait and normal Register-to-Login
+  navigation; all existing members remain unchanged. LoginPage, registration
+  fixtures/randomizers and all five existing test classes are unchanged.
 
 Course Detail was added locally in v1.1.5 and its support architecture was established
-in v1.1.9. Enrollment TC1 was added in v1.1.10 and TC2 in local v1.1.11.
-TC3 and cancellation-only cleanup are present in local v1.1.13. This release adds
-only TC4/TC5 to that inspected baseline; GitHub main still reports v1.1.10.
-TC1–TC3 methods and all existing Course Detail members are preserved. AccountPage
-gains one refresh operation; HomePage gains authentication-state detection and
-allows login recovery when already on `/login`. Its existing logout method is unchanged.
-Dependency versions are unchanged.
+in v1.1.9. Enrollment TC1 was added in v1.1.10, TC2 in v1.1.11, TC3 in v1.1.13,
+TC4/TC5 in v1.1.14 and TC6/TC7 in v1.1.15. This release adds only Account TC1–TC4
+and their minimal Page Object integration. GitHub main v1.1.15 at
+`964b5d9095d0b1a6bf539918ef82119e2efd9dd9` matched all 42 local baseline files.
+The project version increments once to v1.1.16; dependencies and Wrapper are unchanged.
 
 ## Allure and results
 

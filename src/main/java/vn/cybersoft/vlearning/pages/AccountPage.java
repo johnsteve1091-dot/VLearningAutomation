@@ -1,5 +1,6 @@
 package vn.cybersoft.vlearning.pages;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,8 +26,204 @@ public class AccountPage extends BasePage {
     private static final By CANCEL_COURSE = By.xpath(".//button[contains(@class,'btnGlobal')"
             + " and normalize-space()='Hủy khóa học']");
 
+    private static final By ACTIVE_PERSONAL_INFO = By.cssSelector("#infoPersonal.tabContent.active");
+    private static final By PERSONAL_ROWS = By.cssSelector("#infoPersonal.tabContent.active section.userInfo p");
+    private static final By PERSONAL_VALUE = By.cssSelector("span.ml-2");
+    private static final By UPDATE_PROFILE = By.cssSelector("#infoPersonal.tabContent.active"
+            + " button[data-toggle='modal'][data-target='#myModal']");
+    private static final By EDIT_MODAL = By.id("myModal");
+    private static final By EDIT_HEADING = By.cssSelector("#myModal .modal-header h5.modal-title");
+    private static final By EDIT_FULL_NAME = By.cssSelector("#myModal form input[name='hoTen']");
+    private static final By EDIT_PASSWORD = By.cssSelector("#myModal form input[name='matKhau']");
+    private static final By EDIT_EMAIL = By.cssSelector("#myModal form input[name='email']");
+    private static final By EDIT_PHONE = By.cssSelector("#myModal form input[name='soDT']");
+    private static final By EDIT_COMPLETE = By.xpath("//*[@id='myModal']"
+            + "//div[contains(@class,'modal-footer')]//button[normalize-space()='Hoàn thành']");
+    private static final By EDIT_CLOSE = By.xpath("//*[@id='myModal']"
+            + "//div[contains(@class,'modal-footer')]//button[normalize-space()='Đóng']");
+    private static final By EDIT_DISMISS = By.cssSelector("#myModal .modal-header"
+            + " button[type='button'][data-dismiss='modal']");
+
     public AccountPage(WebDriver driver) {
         super(driver);
+    }
+
+    public boolean waitUntilAtAccountPage() {
+        try {
+            return getWait().until(currentDriver ->
+                    "/thongtincanhan".equals(URI.create(currentDriver.getCurrentUrl()).getPath()));
+        } catch (TimeoutException routeNotReached) {
+            return false;
+        }
+    }
+
+    public boolean isAccountRootDisplayed() {
+        return isAccountControlDisplayed(ROOT);
+    }
+
+    public boolean isPersonalInformationActive() {
+        return isAccountControlDisplayed(ACTIVE_PERSONAL_INFO);
+    }
+
+    public String getPersonalAccount() {
+        waitForAccountControl(ACTIVE_PERSONAL_INFO, false);
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            String account = readPersonalValue("Tài khoản");
+            return account.isBlank() ? null : account;
+        });
+    }
+
+    public AccountPage waitUntilPersonalInformationReady(String expectedAccount) {
+        waitForAccountControl(ROOT, false);
+        waitForAccountControl(ACTIVE_PERSONAL_INFO, false);
+        getWait().ignoring(StaleElementReferenceException.class).until(currentDriver ->
+                expectedAccount.equals(readPersonalValue("Tài khoản")));
+        return this;
+    }
+
+    /** Wait for this account's populated response; expected field values remain test inputs. */
+    public PersonalInformation readPersonalInformation(String expectedAccount) {
+        waitUntilPersonalInformationReady(expectedAccount);
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            PersonalInformation information = new PersonalInformation(
+                    readPersonalValue("Tài khoản"), readPersonalValue("Email"),
+                    readPersonalValue("Họ và tên"), readPersonalValue("Số điện thoại"),
+                    readPersonalValue("Nhóm"), readPersonalValue("Đối tượng"));
+            return expectedAccount.equals(information.account()) && !information.email().isBlank()
+                    && !information.fullName().isBlank() && !information.phone().isBlank()
+                    && !information.group().isBlank() && !information.learnerType().isBlank()
+                    ? information : null;
+        });
+    }
+
+    public boolean isUpdateProfileAvailable() {
+        try {
+            return waitForAccountControl(UPDATE_PROFILE, true) != null;
+        } catch (TimeoutException updateUnavailable) {
+            return false;
+        }
+    }
+
+    public AccountPage openEditProfile() {
+        waitForAccountControl(UPDATE_PROFILE, true).click();
+        waitForAccountControl(EDIT_MODAL, false);
+        return this;
+    }
+
+    public EditProfileControls readEditProfileControls() {
+        waitForAccountControl(EDIT_MODAL, false);
+        return new EditProfileControls(isAccountControlDisplayed(EDIT_MODAL),
+                normalize(waitForAccountControl(EDIT_HEADING, false).getText()),
+                readInputControl(EDIT_FULL_NAME), readInputControl(EDIT_PASSWORD),
+                readInputControl(EDIT_EMAIL), readInputControl(EDIT_PHONE),
+                isAccountControlDisplayed(EDIT_COMPLETE), isAccountControlDisplayed(EDIT_CLOSE));
+    }
+
+    /** Input only: no submit action is exposed or invoked. */
+    public void enterEditProfileValues(String fullName, String password, String email, String phone) {
+        waitForAccountControl(EDIT_MODAL, false);
+        enterEditValue(EDIT_FULL_NAME, fullName);
+        WebElement passwordInput = waitForAccountControl(EDIT_PASSWORD, true);
+        if (!"password".equals(passwordInput.getDomProperty("type"))) {
+            throw new IllegalStateException("Edit Profile password input must be masked before typing.");
+        }
+        enterEditValue(EDIT_PASSWORD, password);
+        if (!"password".equals(passwordInput.getDomProperty("type"))) {
+            passwordInput.clear();
+            throw new IllegalStateException("Edit Profile password input stopped being masked.");
+        }
+        enterEditValue(EDIT_EMAIL, email);
+        enterEditValue(EDIT_PHONE, phone);
+    }
+
+    /** Password evidence is boolean only; raw secret values never enter the snapshot. */
+    public EditProfileValues readEditProfileValues(String expectedPassword) {
+        WebElement passwordInput = waitForAccountControl(EDIT_PASSWORD, false);
+        boolean passwordMatches = expectedPassword.equals(passwordInput.getDomProperty("value"));
+        boolean passwordMasked = "password".equals(passwordInput.getDomProperty("type"));
+        if (!passwordMasked) passwordInput.clear();
+        return new EditProfileValues(waitForAccountControl(EDIT_FULL_NAME, false).getDomProperty("value"),
+                waitForAccountControl(EDIT_EMAIL, false).getDomProperty("value"),
+                waitForAccountControl(EDIT_PHONE, false).getDomProperty("value"),
+                passwordMatches, passwordMasked);
+    }
+
+    /** Verified header button has type=button and data-dismiss=modal, so it cannot submit the form. */
+    public boolean closeEditProfile() {
+        waitForAccountControl(EDIT_DISMISS, true).click();
+        try {
+            return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver ->
+                    currentDriver.findElements(EDIT_MODAL).stream().noneMatch(WebElement::isDisplayed));
+        } catch (TimeoutException modalStillOpen) {
+            return false;
+        }
+    }
+
+    public record PersonalInformation(String account, String email, String fullName,
+                                      String phone, String group, String learnerType) {}
+
+    public record InputControl(boolean displayed, boolean enabled, String declaredType) {}
+
+    public record EditProfileControls(boolean displayed, String heading, InputControl fullName,
+                                      InputControl password, InputControl email, InputControl phone,
+                                      boolean completeDisplayed, boolean closeDisplayed) {}
+
+    public record EditProfileValues(String fullName, String email, String phone,
+                                    boolean passwordMatches, boolean passwordMasked) {}
+
+    private String readPersonalValue(String label) {
+        String result = "";
+        int matches = 0;
+        for (WebElement row : driver.findElements(PERSONAL_ROWS)) {
+            String text = normalize(row.getDomProperty("textContent"));
+            int colon = text.indexOf(':');
+            if (colon < 0 || !label.equals(text.substring(0, colon).strip())) continue;
+            if (++matches > 1) throw new IllegalStateException("Ambiguous Personal Information label: " + label);
+            List<WebElement> values = row.findElements(PERSONAL_VALUE);
+            if (values.size() > 1) throw new IllegalStateException("Ambiguous Personal Information value: " + label);
+            if (row.isDisplayed() && values.size() == 1 && values.get(0).isDisplayed()) {
+                result = normalize(values.get(0).getText());
+            }
+        }
+        return result;
+    }
+
+    private WebElement waitForAccountControl(By locator, boolean requireEnabled) {
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            List<WebElement> matches = currentDriver.findElements(locator);
+            if (matches.size() > 1) throw new IllegalStateException("Ambiguous Account control: " + locator);
+            if (matches.isEmpty()) return null;
+            WebElement control = matches.get(0);
+            return control.isDisplayed() && (!requireEnabled || control.isEnabled()) ? control : null;
+        });
+    }
+
+    private boolean isAccountControlDisplayed(By locator) {
+        try {
+            return waitForAccountControl(locator, false) != null;
+        } catch (TimeoutException controlNotVisible) {
+            return false;
+        }
+    }
+
+    private InputControl readInputControl(By locator) {
+        try {
+            WebElement input = waitForAccountControl(locator, false);
+            // "phone" is observed markup; browsers expose the unsupported type property as "text".
+            return new InputControl(true, input.isEnabled(), input.getDomAttribute("type"));
+        } catch (TimeoutException inputNotVisible) {
+            return new InputControl(false, false, null);
+        }
+    }
+
+    private void enterEditValue(By locator, String value) {
+        WebElement input = waitForAccountControl(locator, true);
+        input.clear();
+        input.sendKeys(value);
+        getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            List<WebElement> matches = currentDriver.findElements(locator);
+            return matches.size() == 1 && value.equals(matches.get(0).getDomProperty("value"));
+        });
     }
 
     public AccountPage openMyCourses(String expectedAccount) {
