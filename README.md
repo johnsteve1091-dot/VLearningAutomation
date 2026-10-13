@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.16
+# VLearningAutomation — v1.1.19
 
-Cybersoft V Learning Selenium capstone. The active source contains **45 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **54 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -10,7 +10,7 @@ methods**:
 | CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
 | CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
 | EnrollTests | 7 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence; ENROLL-006 duplicate protection; ENROLL-007 two distinct courses |
-| AccountTests | 4 | ACCOUNT-001 authenticated navigation; ACCOUNT-002 newly registered profile; ACCOUNT-003 Edit Profile controls; ACCOUNT-004 input retention without submission |
+| AccountTests | 13 | ACCOUNT-001 navigation; ACCOUNT-002 registered profile; ACCOUNT-003 modal controls; ACCOUNT-004 input retention; ACCOUNT-005 unchanged profile submission; ACCOUNT-006 changed profile persistence and restoration; ACCOUNT-007/009 rejection; ACCOUNT-008/010 isolated field validation; ACCOUNT-011/012 unsaved edits; ACCOUNT-013 guest protection |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -63,7 +63,7 @@ Run Course Detail TC2 independently with:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 45 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 54 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
 registration; their existing behavior and fixtures are preserved. ENROLL-001, TC4,
@@ -71,9 +71,9 @@ TC5, TC6 and TC7 mutate account state and must complete targeted cleanup before 
 
 ## Account tests
 
-Account adds four independent methods in `AccountTests`; each starts with the fresh
+Account contains thirteen independent methods in `AccountTests`; each starts with the fresh
 Homepage browser supplied by BaseTest. The existing Enrollment account is used only
-for ACCOUNT-001, ACCOUNT-003 and ACCOUNT-004.
+for ACCOUNT-001, ACCOUNT-003, ACCOUNT-004, ACCOUNT-005 and ACCOUNT-007–012. ACCOUNT-006 uses the dedicated `testergroup7` fixture in `AccountInput`.
 
 | Test | Behavior and assertions |
 | --- | --- |
@@ -81,6 +81,15 @@ for ACCOUNT-001, ACCOUNT-003 and ACCOUNT-004.
 | ACCOUNT-002 | Generate one unique account/email pair with the unchanged RegisterSupport randomizers. Register with existing valid fixtures and GP01, verify success, explicitly log in with that new account's registration password, and compare all six profile values: username, email, full name, phone, group and `Học viên`. |
 | ACCOUNT-003 | Click available Cập nhật, verify visible Edit Profile modal, exact heading, four visible enabled inputs and observed markup types, and displayed Hoàn thành/Đóng buttons. No data entry or submit. |
 | ACCOUNT-004 | Enter valid fixtures and one generated email, compare input DOM values and password match/masking booleans, then verify the modal closes through the confirmed header dismiss button. Never click Hoàn thành or submit. |
+| ACCOUNT-005 | Capture the current Full Name, Email and Phone; submit those same values with EnrollInput.PASSWORD unchanged; assert the exact update-success title, refresh and verify all three values remain unchanged. |
+| ACCOUNT-006 | Prepare three different valid values, submit once with the dedicated account password unchanged, assert the exact success title, refresh and compare each field with both submitted and original values; restore and verify the original profile in finally. |
+| ACCOUNT-007 | Verify four empty inputs, submit once, observe rejection with the modal open and no success, close and refresh, compare all three original values. No exact wording assertions. |
+| ACCOUNT-008 | Four isolated submissions with one empty field and three original valid values. Check its exact required warning, close and refresh after each. Wrong Password wording remains a failure. |
+| ACCOUNT-009 | Reuse the four invalid Register fixtures, verify entered values, submit once and verify rejection and unchanged originals after refresh. No exact wording assertions. |
+| ACCOUNT-010 | Four isolated submissions with one invalid field and three original valid values. Verify its format warning, close and refresh after each. Incorrect Phone spelling remains a failure. |
+| ACCOUNT-011 | Enter three different valid profile values and the existing password; Đóng; reopen and check discarded inputs; Đóng again; refresh and compare the original stored profile. |
+| ACCOUNT-012 | Four independent Name/Password/Email/Phone attempts. Change only one input, verify the other three are untouched, Đóng, reopen and check retention, Đóng and refresh before the next attempt. |
+| ACCOUNT-013 | Remain guest and directly open the supplied Account URL. Require a loaded Login or HTTP access-denied state, and verify no protected values, personal panel or usable editing controls are exposed. |
 
 Profile values are read by their associated labels inside the active Personal
 Information section. Whitespace/NBSP are normalized; case, accents, punctuation
@@ -99,7 +108,57 @@ A created account persists because no verified deletion workflow exists.
 ACCOUNT-004 checks masking before typing and exposes no raw password in snapshots,
 assertion messages, logs or custom attachments. The header dismiss button is confirmed
 as `type="button"` with `data-dismiss="modal"`, so dismissal does not submit the form.
-BaseTest retains normal session cleanup and browser quit for all four cases.
+BaseTest retains normal session cleanup and browser quit for all thirteen cases.
+
+ACCOUNT-005/006 read only Full Name, Email and Phone into a password-free snapshot.
+They reuse the existing modal entry operation and verify `Cập nhật thành công` in
+the visible SweetAlert. Popup disappearance and an unobstructed Update control
+are explicitly awaited before refreshing. There are no JavaScript clicks or sleeps.
+
+ACCOUNT-006 reuses `RegisterSupport.generateUniqueEmail()` once and the existing
+valid name/phone fixtures. Small letter/space name and ten-digit phone alternatives
+are selected only when the canonical fixture equals the original field. The
+original password is supplied unchanged for update and restoration; it is never
+generated, captured in profile snapshots or written to custom evidence.
+
+`AccountSupport` restores after a submission attempt, including business failures.
+It refreshes and verifies the original three fields, recovers an expired login
+through existing Page Objects when necessary, and never touches courses. A cleanup
+failure is attached to the original failure; if business assertions passed, cleanup
+failure fails the test separately. No profile cleanup is added to ACCOUNT-005.
+
+ACCOUNT-007–010 all reuse `EnrollInput.ACCOUNT` / `EnrollInput.PASSWORD` and capture
+only the original Full Name, Email and Phone from the live Account page. ACCOUNT-009/010
+reuse `RegisterInput.Wrong`; expected warnings remain in the unchanged `RegisterMessage`.
+The modal reader associates each error with its immediately preceding input.
+Invalid responses are polled for at least two seconds with 500 ms of stable field
+state, within the existing 15-second explicit-wait limit. Observed popup titles
+remain in the evidence even if the popup disappears. These are bounded UI observations,
+not a guarantee that a server can never respond later.
+
+The exact supplied ACCOUNT-008 and ACCOUNT-010 corrections are included: four
+independent single-empty/single-invalid-field attempts, with close and refresh after
+each. Their existing method names remain for command compatibility. They no longer
+use cumulative corrections or end with a successful update. Existing expected
+Password wording and Phone spelling remain unchanged, and mismatches remain failures.
+
+ACCOUNT-011/012 reuse the existing valid replacement generator and actual original
+profile snapshots. They click the footer **Đóng**, never Hoàn thành, the header X,
+Escape or refresh to dismiss the modal. A close observation waits for the modal to
+be hidden and Cập nhật to be interactable, while retaining observed popup titles.
+Each individual-field attempt begins after refresh with independently checked input
+state. Password comparisons remain inside AccountPage; attachments contain only
+match/masking/empty booleans. No intentional Password prefill exception is assumed.
+Retention mismatches remain failures even when later attempts complete. Cleanup
+checks actual persisted values and invokes existing UI restoration only if it
+finds a mutation; normal runs submit no update.
+
+ACCOUNT-013 uses BaseTest's fresh browser and never logs in. It inspects Login,
+Account, Personal Information, profile values and editing controls after direct
+navigation. A visible Login form can appear at any URL; a confirmed document HTTP
+401/403 is also accepted when protected content is inaccessible. Missing status,
+blank/loading content or an unrecognized denial page is not proof of protection.
+No API request, cookie/token injection or guessed access-denied locator is used.
 
 PowerShell, from the project root:
 
@@ -109,15 +168,26 @@ PowerShell, from the project root:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.newlyRegisteredAccountShouldShowCorrectProfile"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.updateProfileModalShouldOpen"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.updateProfileInputsShouldAcceptValues"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.updateProfileShouldSucceedWithExistingInformation"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.updateProfileShouldPersistChangedInformation"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.emptyProfileUpdateShouldBeRejected"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.requiredProfileWarningsShouldClearIncrementally"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.invalidProfileUpdateShouldBeRejected"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.formatWarningsShouldClearIncrementally"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.unsavedProfileChangesShouldBeDiscarded"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.individualUnsavedProfileChangesShouldBeDiscarded"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.guestShouldNotAccessPersonalInformation"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 .\gradlew.bat test
 ```
 
-On Linux/macOS, replace `.\gradlew.bat` with `bash gradlew`. This delivery's Gradle
-compilation and browser runs were **blocked at Wrapper download**; none of the new
-Account cases has a live PASS from this environment. See `CHANGE_REPORT.md` for the
-actual errors and the separate static/offline checks.
+On Linux/macOS, replace `.\gradlew.bat` with `bash gradlew`. Full compilation and
+browser runs for v1.1.19 were **not executed**: the unchanged environment has Java 17,
+no Java 26 or Chrome installation and no cached Gradle distribution. The previous
+Wrapper attempt failed with `Network is unreachable`; it was not retried without a
+changed condition. Static parsing and 45 offline support checks passed; neither is a
+live Selenium PASS. See `CHANGE_REPORT.md` for the exact validation status.
 
 ## Enrollment tests
 
@@ -460,7 +530,7 @@ Register and Course List test classes are outside this Enrollment release.
   No helpers, nested types, raw locators or DOM parsing.
 - `LoginPage.waitUntilAtLoginPage`: explicit wait for the `/login` URL path only.
 - `CourseDetailPage.waitUntilAtCourseUrl`: explicit wait reusing `sameBrowserUrl`.
-- `AccountTests`: exactly four independent direct `@Test` methods with scenario
+- `AccountTests`: exactly thirteen independent direct `@Test` methods with scenario
   orchestration, assertions, compact logs and non-secret evidence; no helpers or locators.
 - `AccountPage`: labeled personal-information snapshots, Account route/readiness,
   scoped Edit Profile controls, input DOM values and safe dismissal. Every existing
@@ -476,15 +546,17 @@ Register and Course List test classes are outside this Enrollment release.
 - `CourseSubCardContentSupport.courseNamesMatch`: existing ellipsis-aware Course-name
   comparison reused without changing its algorithm.
 - `RegisterPage`: additive success-dialog close wait and normal Register-to-Login
-  navigation; all existing members remain unchanged. LoginPage, registration
+  navigation; all existing members remain unchanged. Existing LoginPage methods, registration
   fixtures/randomizers and all five existing test classes are unchanged.
 
-Course Detail was added locally in v1.1.5 and its support architecture was established
-in v1.1.9. Enrollment TC1 was added in v1.1.10, TC2 in v1.1.11, TC3 in v1.1.13,
-TC4/TC5 in v1.1.14 and TC6/TC7 in v1.1.15. This release adds only Account TC1–TC4
-and their minimal Page Object integration. GitHub main v1.1.15 at
-`964b5d9095d0b1a6bf539918ef82119e2efd9dd9` matched all 42 local baseline files.
-The project version increments once to v1.1.16; dependencies and Wrapper are unchanged.
+Course Detail was added locally in v1.1.5 and its support architecture in v1.1.9.
+Enrollment reached TC7 in v1.1.15; Account TC1–TC4 arrived in v1.1.16, TC5/TC6 in
+v1.1.17 and TC7–TC10 in v1.1.18. This release integrates the exact later TC8/TC10
+correction files and preserves them while adding only ACCOUNT-011–013.
+GitHub main remains v1.1.15 at `964b5d9095d0b1a6bf539918ef82119e2efd9dd9`.
+The version increments once from v1.1.18 to v1.1.19. Dependencies, Wrapper and suite
+registration are unchanged. LoginPage has only one additive, read-only Login-form
+observation method for TC13; its existing behavior and tests are unchanged.
 
 ## Allure and results
 

@@ -1,10 +1,14 @@
 package vn.cybersoft.vlearning.pages;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
@@ -14,6 +18,8 @@ import vn.cybersoft.vlearning.core.BasePage;
 
 /** Account/My Courses DOM operations; course identity is exact normalized visible title text. */
 public class AccountPage extends BasePage {
+
+    public static final String ACCOUNT_URL = "https://demo2.cybersoft.edu.vn/thongtincanhan";
 
     private static final By ROOT = By.cssSelector("section.infoPage");
     private static final By PERSONAL_INFO = By.id("infoPersonal");
@@ -43,6 +49,11 @@ public class AccountPage extends BasePage {
             + "//div[contains(@class,'modal-footer')]//button[normalize-space()='Đóng']");
     private static final By EDIT_DISMISS = By.cssSelector("#myModal .modal-header"
             + " button[type='button'][data-dismiss='modal']");
+    private static final By UPDATE_DIALOG = By.cssSelector("div.swal-modal[role='dialog']");
+    private static final By UPDATE_DIALOG_TITLE = By.cssSelector("div.swal-modal[role='dialog'] .swal-title");
+    // The confirmed error belongs to the immediately preceding input, never to another field.
+    private static final By EDIT_FIELD_ERROR = By.xpath("./following-sibling::*[1]"
+            + "[self::div and contains(concat(' ', normalize-space(@class), ' '), ' errorMessage ')]");
 
     public AccountPage(WebDriver driver) {
         super(driver);
@@ -170,6 +181,377 @@ public class AccountPage extends BasePage {
 
     public record EditProfileValues(String fullName, String email, String phone,
                                     boolean passwordMatches, boolean passwordMasked) {}
+
+    /** Only the three editable personal fields; never retains a password. */
+    public record ProfileValues(String fullName, String email, String phone) {}
+
+    public ProfileValues readProfileValues(String expectedAccount) {
+        return readProfileValues(expectedAccount, true);
+    }
+
+    private ProfileValues readProfileValues(String expectedAccount, boolean requirePopulated) {
+        waitUntilPersonalInformationReady(expectedAccount);
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            ProfileValues values = new ProfileValues(readPersonalValue("Họ và tên"),
+                    readPersonalValue("Email"), readPersonalValue("Số điện thoại"));
+            return expectedAccount.equals(readPersonalValue("Tài khoản"))
+                    && (!requirePopulated || (!values.fullName().isBlank()
+                    && !values.email().isBlank() && !values.phone().isBlank()))
+                    ? values : null;
+        });
+    }
+
+    /** Reuse the existing input operation, always supplying this account's current password. */
+    public void enterProfileUpdateValues(ProfileValues values, String currentPassword) {
+        try {
+            enterEditProfileValues(values.fullName(), currentPassword, values.email(), values.phone());
+        } catch (RuntimeException inputFailure) {
+            // A WebDriver sendKeys exception can contain its command arguments.
+            throw new IllegalStateException("Could not enter profile values ("
+                    + inputFailure.getClass().getSimpleName() + "); password details omitted.");
+        }
+    }
+
+    /** One click only; a slow response must not trigger another submission. */
+    public void submitEditProfile() {
+        waitForAccountControl(EDIT_COMPLETE, true).click();
+    }
+
+    /** Return the actual visible response so the test can assert and report its exact title. */
+    public String waitForUpdatePopupTitle() {
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            List<WebElement> titles = currentDriver.findElements(UPDATE_DIALOG_TITLE).stream()
+                    .filter(WebElement::isDisplayed).toList();
+            if (titles.size() > 1) throw new IllegalStateException("Ambiguous visible update response.");
+            if (titles.isEmpty()) return null;
+            String title = titles.getFirst().getText().strip();
+            return title.isBlank() ? null : title;
+        });
+    }
+
+    public void waitUntilUpdatePopupClosed() {
+        // Reuse the site's existing timed SweetAlert-close workflow; no guessed dismiss control.
+        getWait().ignoring(StaleElementReferenceException.class).until(currentDriver ->
+                currentDriver.findElements(UPDATE_DIALOG).stream().noneMatch(WebElement::isDisplayed));
+    }
+
+    public void closeEditProfileIfOpen() {
+        if (driver.findElements(EDIT_MODAL).stream().anyMatch(WebElement::isDisplayed)
+                && !closeEditProfile()) {
+            throw new IllegalStateException("Edit Profile did not close through its verified dismiss control.");
+        }
+    }
+
+    public AccountPage waitUntilProfileInteractable() {
+        waitUntilUpdatePopupClosed();
+        closeEditProfileIfOpen();
+        getWait().ignoring(StaleElementReferenceException.class)
+                .until(currentDriver -> isUpdateProfileInteractableNow());
+        return this;
+    }
+
+    public ProfileValues refreshProfileValues(String expectedAccount) {
+        waitUntilProfileInteractable();
+        driver.navigate().refresh();
+        return readProfileValues(expectedAccount);
+    }
+
+    /** Also reads blank values after a defective accepted request, so cleanup can restore them. */
+    public ProfileValues refreshProfileValues(String expectedAccount, boolean requirePopulated) {
+        waitUntilProfileInteractable();
+        driver.navigate().refresh();
+        return readProfileValues(expectedAccount, requirePopulated);
+    }
+
+    public void clearEditProfileFields() {
+        waitForAccountControl(EDIT_MODAL, false);
+        for (By locator : List.of(EDIT_FULL_NAME, EDIT_PASSWORD, EDIT_EMAIL, EDIT_PHONE)) {
+            WebElement input = waitForAccountControl(locator, true);
+            input.clear();
+            // A real keystroke also updates controlled-form state after WebDriver clear().
+            input.sendKeys(Keys.SPACE, Keys.BACK_SPACE);
+            getWait().ignoring(StaleElementReferenceException.class).until(currentDriver ->
+                    "".equals(currentDriver.findElement(locator).getDomProperty("value")));
+        }
+    }
+
+    public void enterEditFullName(String fullName) {
+        enterEditValue(EDIT_FULL_NAME, fullName);
+    }
+
+    public void enterEditPassword(String password) {
+        try {
+            WebElement input = waitForAccountControl(EDIT_PASSWORD, true);
+            if (!"password".equals(input.getDomProperty("type"))) {
+                throw new IllegalStateException("Edit Profile password input must be masked before typing.");
+            }
+            enterEditValue(EDIT_PASSWORD, password);
+            if (!"password".equals(waitForAccountControl(EDIT_PASSWORD, true).getDomProperty("type"))) {
+                waitForAccountControl(EDIT_PASSWORD, true).clear();
+                throw new IllegalStateException("Edit Profile password input stopped being masked.");
+            }
+        } catch (RuntimeException inputFailure) {
+            throw new IllegalStateException("Could not enter the existing profile password ("
+                    + inputFailure.getClass().getSimpleName() + "); password details omitted.");
+        }
+    }
+
+    public void enterEditEmail(String email) {
+        enterEditValue(EDIT_EMAIL, email);
+    }
+
+    public void enterEditPhone(String phone) {
+        enterEditValue(EDIT_PHONE, phone);
+    }
+
+    public record EditWarnings(String fullName, String password, String email, String phone) {
+        public boolean hasAny() {
+            return !fullName.isBlank() || !password.isBlank() || !email.isBlank() || !phone.isBlank();
+        }
+    }
+
+    /** Titles are latched across polling, including a popup that has already disappeared. */
+    public record EditValidationState(EditWarnings warnings, boolean modalDisplayed,
+                                      List<String> popupTitles, boolean settled) {}
+
+    /** Behavior-only rejection tests require observable validation, not four particular warnings. */
+    public EditValidationState waitForEditRejection() {
+        return waitForEditResponse(EditWarnings::hasAny, false);
+    }
+
+    /** Wait for each field's appearance/disappearance without waiting for particular wording. */
+    public EditValidationState waitForEditValidation(boolean fullNameWarning, boolean passwordWarning,
+                                                    boolean emailWarning, boolean phoneWarning) {
+        boolean expectPopup = !fullNameWarning && !passwordWarning && !emailWarning && !phoneWarning;
+        return waitForEditResponse(warnings ->
+                !warnings.fullName().isBlank() == fullNameWarning
+                && !warnings.password().isBlank() == passwordWarning
+                && !warnings.email().isBlank() == emailWarning
+                && !warnings.phone().isBlank() == phoneWarning, expectPopup);
+    }
+
+    private EditValidationState waitForEditResponse(Predicate<EditWarnings> expectedWarnings,
+                                                     boolean expectPopup) {
+        long started = System.nanoTime();
+        long[] stableSince = {started};
+        List<String> observedTitles = new ArrayList<>();
+        EditValidationState[] last = {null};
+        try {
+            return getWait().pollingEvery(Duration.ofMillis(100))
+                    .ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+                        for (WebElement title : currentDriver.findElements(UPDATE_DIALOG_TITLE)) {
+                            if (!title.isDisplayed()) continue;
+                            String actual = title.getText().strip();
+                            if (!actual.isBlank() && !observedTitles.contains(actual)) observedTitles.add(actual);
+                        }
+                        boolean modal = currentDriver.findElements(EDIT_MODAL).stream()
+                                .anyMatch(WebElement::isDisplayed);
+                        EditWarnings warnings = modal ? readEditWarnings() : new EditWarnings("", "", "", "");
+                        EditValidationState current = new EditValidationState(warnings, modal,
+                                List.copyOf(observedTitles), false);
+                        long now = System.nanoTime();
+                        if (!current.equals(last[0])) stableSince[0] = now;
+                        last[0] = current;
+                        // A popup during an invalid submission is a terminal response to report, not retry.
+                        if (!expectPopup && !observedTitles.isEmpty()) {
+                            return new EditValidationState(warnings, modal, current.popupTitles(), false);
+                        }
+                        boolean response = expectPopup ? !observedTitles.isEmpty() : modal && warnings.hasAny();
+                        boolean stable = now - stableSince[0] >= Duration.ofMillis(500).toNanos();
+                        // Observe every invalid submission for at least two seconds, polling for late success.
+                        boolean observed = expectPopup || now - started >= Duration.ofSeconds(2).toNanos();
+                        if (response && expectedWarnings.test(warnings) && stable && observed) {
+                            return new EditValidationState(warnings, modal, current.popupTitles(), true);
+                        }
+                        return null;
+                    });
+        } catch (TimeoutException unmetValidationState) {
+            // Return the actual mismatch for business assertions; do not turn missing/wrong errors into PASS.
+            if (last[0] != null) return last[0];
+            throw new IllegalStateException("Edit Profile validation could not be observed within 15 seconds.");
+        }
+    }
+
+    private EditWarnings readEditWarnings() {
+        return new EditWarnings(readEditFieldWarning(EDIT_FULL_NAME), readEditFieldWarning(EDIT_PASSWORD),
+                readEditFieldWarning(EDIT_EMAIL), readEditFieldWarning(EDIT_PHONE));
+    }
+
+    private String readEditFieldWarning(By inputLocator) {
+        List<WebElement> inputs = driver.findElements(inputLocator);
+        if (inputs.size() != 1) throw new IllegalStateException("Expected one Edit Profile input: " + inputLocator);
+        List<WebElement> errors = inputs.get(0).findElements(EDIT_FIELD_ERROR);
+        if (errors.size() > 1) throw new IllegalStateException("Ambiguous field-specific Edit Profile warning.");
+        return inputs.get(0).isDisplayed() && !errors.isEmpty() && errors.get(0).isDisplayed()
+                ? normalize(errors.get(0).getText()) : "";
+    }
+
+    /** Opaque password baseline: no password accessor and no password in its string representation. */
+    public static final class EditProfileSnapshot {
+        private final EditProfileValues values;
+        private final String password;
+
+        private EditProfileSnapshot(EditProfileValues values, String password) {
+            this.values = values;
+            this.password = password;
+        }
+
+        public EditProfileValues values() { return values; }
+        public boolean passwordEmpty() { return password.isEmpty(); }
+        @Override public String toString() {
+            return values + ", passwordEmpty=" + passwordEmpty();
+        }
+    }
+
+    public EditProfileSnapshot captureEditProfileSnapshot(String expectedPassword) {
+        EditProfileValues values = readEditProfileValues(expectedPassword);
+        String password = waitForAccountControl(EDIT_PASSWORD, false).getDomProperty("value");
+        return new EditProfileSnapshot(values, password);
+    }
+
+    public boolean isPasswordUnchangedSince(EditProfileSnapshot baseline) {
+        return baseline.password.equals(waitForAccountControl(EDIT_PASSWORD, false).getDomProperty("value"));
+    }
+
+    public boolean isEditProfileDisplayedNow() {
+        return isDisplayedNow(EDIT_MODAL);
+    }
+
+    public record EditCloseObservation(String finalUrl, String closeButtonType, boolean modalDisplayed,
+                                       boolean updateInteractable, List<String> popupTitles, boolean settled) {}
+
+    /** Click only the confirmed footer Đóng control. Never fall back to the header X or refresh. */
+    public EditCloseObservation closeEditProfileWithCloseButton() {
+        WebElement close = waitForAccountControl(EDIT_CLOSE, true);
+        String buttonType = close.getDomProperty("type");
+        boolean submitsForm = Boolean.TRUE.equals(((JavascriptExecutor) driver).executeScript(
+                "return Boolean(arguments[0].form) && arguments[0].type === 'submit';", close));
+        if (submitsForm) {
+            throw new IllegalStateException("Đóng is associated with a form as a submit control; "
+                    + "the non-submitting close scenario cannot safely click it.");
+        }
+        close.click();
+        long started = System.nanoTime();
+        long[] stableSince = {started};
+        List<String> titles = new ArrayList<>();
+        EditCloseObservation[] last = {null};
+        try {
+            return getWait().pollingEvery(Duration.ofMillis(100))
+                    .ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+                        captureVisibleUpdateTitles(titles);
+                        EditCloseObservation current = new EditCloseObservation(currentDriver.getCurrentUrl(),
+                                buttonType, isEditProfileDisplayedNow(), isUpdateProfileInteractableNow(),
+                                List.copyOf(titles), false);
+                        long now = System.nanoTime();
+                        if (!current.equals(last[0])) stableSince[0] = now;
+                        last[0] = current;
+                        if (!current.modalDisplayed() && current.updateInteractable()
+                                && now - started >= Duration.ofSeconds(2).toNanos()
+                                && now - stableSince[0] >= Duration.ofMillis(500).toNanos()) {
+                            return new EditCloseObservation(current.finalUrl(), buttonType, false, true,
+                                    current.popupTitles(), true);
+                        }
+                        return null;
+                    });
+        } catch (TimeoutException closeDidNotSettle) {
+            if (last[0] != null) return last[0];
+            throw new IllegalStateException("Could not observe the Đóng result within 15 seconds.");
+        }
+    }
+
+    /** The close tests must prove Đóng closed the modal before any refresh is permitted. */
+    public ProfileValues refreshProfileAfterUnsavedClose(String expectedAccount) {
+        if (isEditProfileDisplayedNow()) {
+            throw new IllegalStateException("Đóng has not closed Edit Profile; refusing to use refresh as dismissal.");
+        }
+        getWait().ignoring(StaleElementReferenceException.class)
+                .until(currentDriver -> isUpdateProfileInteractableNow());
+        driver.navigate().refresh();
+        return readProfileValues(expectedAccount, false);
+    }
+
+    private boolean isDisplayedNow(By locator) {
+        return driver.findElements(locator).stream().anyMatch(WebElement::isDisplayed);
+    }
+
+    private boolean isUpdateProfileInteractableNow() {
+        List<WebElement> controls = driver.findElements(UPDATE_PROFILE);
+        if (controls.size() != 1) return false;
+        WebElement button = controls.get(0);
+        if (!button.isDisplayed() || !button.isEnabled()) return false;
+        return Boolean.TRUE.equals(((JavascriptExecutor) driver).executeScript("""
+                const button = arguments[0];
+                const rect = button.getBoundingClientRect();
+                const hit = document.elementFromPoint(rect.left + rect.width / 2,
+                        rect.top + rect.height / 2);
+                return hit === button || button.contains(hit);
+                """, button));
+    }
+
+    private void captureVisibleUpdateTitles(List<String> titles) {
+        for (WebElement title : driver.findElements(UPDATE_DIALOG_TITLE)) {
+            if (!title.isDisplayed()) continue;
+            String actual = title.getText().strip();
+            if (!actual.isBlank() && !titles.contains(actual)) titles.add(actual);
+        }
+    }
+
+    public record GuestAccountObservation(String requestedUrl, String finalUrl, boolean loginDisplayed,
+                                           boolean accountDisplayed, boolean personalInformationAccessible,
+                                           boolean updateAccessible, boolean editModalDisplayed,
+                                           boolean profileDataExposed, boolean protectedContentObserved,
+                                           int httpResponseStatus, boolean documentComplete, boolean settled) {}
+
+    /** A real browser navigation, with no login, injected token, API request or account click. */
+    public GuestAccountObservation openAccountAsGuestAndObserve() {
+        driver.get(ACCOUNT_URL);
+        LoginPage login = new LoginPage(driver);
+        long started = System.nanoTime();
+        long[] stableSince = {started};
+        boolean[] protectedObserved = {false};
+        GuestAccountObservation[] last = {null};
+        try {
+            return getWait().pollingEvery(Duration.ofMillis(100))
+                    .ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+                        boolean personal = isDisplayedNow(ACTIVE_PERSONAL_INFO);
+                        boolean exposed = currentDriver.findElements(PERSONAL_INFO).stream()
+                                .filter(WebElement::isDisplayed)
+                                .flatMap(panel -> panel.findElements(PERSONAL_VALUE).stream())
+                                .anyMatch(value -> value.isDisplayed() && !value.getText().isBlank());
+                        boolean update = isUpdateProfileInteractableNow();
+                        boolean edit = isEditProfileDisplayedNow();
+                        protectedObserved[0] |= exposed || update || edit;
+                        // Read the current document's navigation entry, never make a second HTTP request.
+                        // responseStatus can be unavailable/0; that is not evidence of denial.
+                        List<?> navigation = (List<?>) ((JavascriptExecutor) currentDriver).executeScript("""
+                                const entry = performance.getEntriesByType('navigation')[0];
+                                return [document.readyState === 'complete',
+                                    entry && Number.isFinite(entry.responseStatus) ? entry.responseStatus : 0];
+                                """);
+                        int status = ((Number) navigation.get(1)).intValue();
+                        GuestAccountObservation current = new GuestAccountObservation(ACCOUNT_URL,
+                                currentDriver.getCurrentUrl(), login.isLoginFormDisplayedNow(), isDisplayedNow(ROOT),
+                                personal, update, edit, exposed, protectedObserved[0], status,
+                                Boolean.TRUE.equals(navigation.get(0)), false);
+                        long now = System.nanoTime();
+                        if (!current.equals(last[0])) stableSince[0] = now;
+                        last[0] = current;
+                        boolean conclusive = current.loginDisplayed() || status == 401 || status == 403
+                                || protectedObserved[0];
+                        if (current.documentComplete() && conclusive
+                                && now - started >= Duration.ofSeconds(2).toNanos()
+                                && now - stableSince[0] >= Duration.ofMillis(500).toNanos()) {
+                            return new GuestAccountObservation(current.requestedUrl(), current.finalUrl(),
+                                    current.loginDisplayed(), current.accountDisplayed(), personal, update, edit,
+                                    exposed, protectedObserved[0], status, true, true);
+                        }
+                        return null;
+                    });
+        } catch (TimeoutException noConclusiveAccessDecision) {
+            if (last[0] != null) return last[0];
+            throw new IllegalStateException("No Account guest-access state could be observed within 15 seconds.");
+        }
+    }
 
     private String readPersonalValue(String label) {
         String result = "";
@@ -340,4 +722,18 @@ public class AccountPage extends BasePage {
     private static String normalize(String text) {
         return text == null ? "" : text.replace('\u00a0', ' ').replaceAll("\\s+", " ").strip();
     }
+
+
+    public AccountPage openAccountAsGuest() {
+        driver.get(ACCOUNT_URL);
+        return this;
+    }
+
+    public boolean isGuestAccountPageBlank() {
+        return driver.findElement(By.tagName("body"))
+                .getText()
+                .isBlank();
+    }
+
+
 }

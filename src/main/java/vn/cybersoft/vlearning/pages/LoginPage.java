@@ -44,6 +44,14 @@ public class LoginPage extends BasePage {
         super(driver);
     }
 
+    /** Nonblocking observation for the Account guest-access wait; reuses the Login vault locators. */
+    public boolean isLoginFormDisplayedNow() {
+        for (By locator : new By[]{ACCOUNT_INPUT, PASSWORD_INPUT, LOGIN_BUTTON}) {
+            if (driver.findElements(locator).stream().noneMatch(WebElement::isDisplayed)) return false;
+        }
+        return true;
+    }
+
     public boolean isAccountInputDisplayed() {
         return isVisible(ACCOUNT_INPUT);
     }

@@ -1,164 +1,145 @@
-# VLearningAutomation — v1.1.16
+# VLearningAutomation v1.1.19 — ACCOUNT-011 through ACCOUNT-013
 
-## Baseline and scope
+## Baseline and preserved corrections
 
-GitHub **main** was inspected first at commit
-`964b5d9095d0b1a6bf539918ef82119e2efd9dd9`, version **1.1.15**.
-All **42 current local files** matched that commit's Git blob hashes; no files
-were added, missing or different. No newer local source was overwritten.
-No applicable AGENTS.md was found. No Git push, merge or branch deletion occurred.
+GitHub main was checked on 2026-10-13: still v1.1.15 at
+`964b5d9095d0b1a6bf539918ef82119e2efd9dd9`. It predates the local Account work.
+The latest complete accessible archive is v1.1.18, with SHA-256
+`7107140dabdea3aad95cfec23929b30ed4753a2fcd891bba36aedc74e05c4189`.
+Its extracted source was verified byte-for-byte against that archive.
 
-Project version increments exactly once: **1.1.15 → 1.1.16**.
-Java 26, Gradle Wrapper 9.7.1, all dependencies and Allure configuration remain
-unchanged. Exactly four Account tests were added: **41 → 45 TestNG methods**.
+That archive predates two subsequent corrections. Both exact source files were
+recovered and integrated verbatim before creating the working baseline:
 
-## Account implementation
+- `ACCOUNT-008-fixed-method.java.txt`: four independent single-empty-field submissions.
+- `ACCOUNT-010-fixed-method.java.txt`: four independent single-invalid-field submissions.
 
-| Test | Scenario and assertions |
+The correction methods were not reconstructed from descriptions. Their existing
+names, assertions, close/refresh workflows and failure behavior remain intact.
+ACCOUNT-001–007 and ACCOUNT-009 remain as in v1.1.18; the supplied corrected
+ACCOUNT-008/010 remain unchanged. The new work adds exactly three methods.
+
+Version increments once: **1.1.18 → 1.1.19**. There are **13 Account tests** and
+**54 TestNG methods overall**. Java 26, Selenium 4.49.0, TestNG 7.12.0, Gradle 9.7.1,
+Log4j and Allure dependencies remain unchanged. No push or merge was performed.
+
+## Implemented tests
+
+| Test / group | Method | Implemented behavior |
+| --- | --- | --- |
+| ACCOUNT-011 / account-tc11 | `unsavedProfileChangesShouldBeDiscarded` | Capture originals; generate different valid Name/Email/Phone; enter all three and the existing password; verify inputs/masking; click Đóng; observe closure/no update response/Account route; reopen and assert discarded inputs; Đóng again; refresh and compare originals. |
+| ACCOUNT-012 / account-tc12 | `individualUnsavedProfileChangesShouldBeDiscarded` | Four independent Name, Password, Email and Phone attempts. Verify fresh baseline, change only the selected field, compare the other three with their captured states, Đóng/reopen/inspect, then Đóng and refresh before the next attempt. Aggregate retention failures while safe. |
+| ACCOUNT-013 / account-tc13 | `guestShouldNotAccessPersonalInformation` | Confirm the fresh browser is guest, navigate directly to the supplied Account URL, wait for a conclusive loaded state, and inspect actual protected data and editing controls. No authentication or account edit action is performed. |
+
+TC11/12 use only `EnrollInput.ACCOUNT` / `EnrollInput.PASSWORD` and the three
+original profile values read at runtime. Replacement values reuse
+`AccountInput.differentValidProfile`, including the existing Register email generator.
+No new generator, password, credentials or hardcoded original profile was added.
+Empty reopened profile inputs or restored original values are accepted; replacement
+values or other unexpected values fail. Unsaved password retention fails; no
+intentional prefill exception has been verified or silently added.
+
+TC12 verifies every fresh form after refresh. Password equality against a captured
+baseline is computed inside AccountPage; there is no password value accessor or
+password text in snapshot string representations. If the Password baseline already
+equals the intended input, the test fails its prerequisite rather than claiming an
+actual change was tested. Retention defects do not stop the other field attempts
+when closing and refresh still establish safe, original state. Stored mutation or
+another unsafe prerequisite stops execution with prior failures preserved.
+
+## Minimal Page Object and support changes
+
+The supplied footer Đóng locator is reused. New close operations never substitute
+header X, Escape, refresh, JavaScript hiding or Hoàn thành. Before clicking, the
+Page Object checks that Đóng is not an associated native form-submit control.
+If it is, the non-submitting scenario fails before an unsafe click. Normal close
+uses WebDriver click and explicit waits for hidden modal plus an interactable
+Cập nhật control. It observes at least two seconds, with 500 ms stable state and
+100 ms polling within the existing 15-second limit; popup titles are retained.
+The existing read-only hit-test logic was extracted for reuse without changing
+its previous behavior. Refresh is refused while the modal is still visible.
+
+No normal TC11/12 path calls the update-submit method. Button semantics, observed
+popup state and stored-data comparisons provide UI evidence; HTTP update requests
+are not intercepted or counted. A custom application handler that silently sends
+a request cannot be ruled out solely by this DOM observation.
+
+Cleanup first checks persisted values. It calls the existing UI restoration mechanism
+only after detecting a difference from the original snapshot. Successful restoration
+does not turn the mutation into a PASS. A broken Đóng does not trigger an alternate
+dismissal or blind update. Cleanup/restoration failures remain separate from the
+primary assertion failure. No course or unrelated account operation was changed.
+
+Guest checks reuse Account locators and the Login form's existing vault locators.
+LoginPage gains one nonblocking read-only observation method; no existing Login
+method or test changes. A visible Login form is accepted at any URL. An actual
+HTTP 401/403 document response is an alternative denial signal, provided no protected
+content is accessible. The browser's existing navigation entry supplies this status;
+no second HTTP/API request is sent. Missing/zero status, blank content, loading state
+or an unrecognized denial screen is not accepted as proof of access protection.
+The code retains protected-data/editing exposure observed during polling, even if
+later navigation hides it. This is bounded browser observation, not a security audit
+of every server endpoint or every possible denial UI.
+
+Browser API reference for the optional HTTP-denial observation:
+[PerformanceResourceTiming.responseStatus](https://developer.mozilla.org/en-US/docs/Web/API/PerformanceResourceTiming/responseStatus),
+inherited by PerformanceNavigationTiming. Unsupported/hidden status is treated as unknown.
+
+## Evidence and privacy
+
+TC11 records originals, intended/entered values, both Đóng results, reopened values
+and refreshed stored values. TC12 records the same observations separately for each
+of its four attempts, including untouched-field comparisons. TC13 records initial
+guest state, requested/final URLs, Login/Account visibility, personal-panel access,
+protected-value exposure, editing availability and settlement/denial evidence.
+
+Password comparisons are boolean; snapshots never print password text. New evidence
+and exceptions redact the existing password. Account and Login implementation retains
+its masking checks. No runtime screenshot or Allure result is included in this ZIP
+because no live browser test was executed here.
+
+## Exact changed-file inventory
+
+| File | Change |
 | --- | --- |
-| ACCOUNT-001 | Existing EnrollInput login, authenticated header avatar, Account path `/thongtincanhan`, visible root, active visible Personal Information and exact authenticated username. |
-| ACCOUNT-002 | Generate account/email once before registration with unchanged RegisterSupport methods. Use existing valid registration fixtures and confirmed GP01, verify registration success, explicitly log in with that generated account and RegisterInput.Correct.PASSWORD, then compare username, email, full name, phone string, group and `Học viên`. |
-| ACCOUNT-003 | Existing login and Account readiness, displayed/enabled Cập nhật, correct visible modal and exact heading, four visible enabled inputs with observed markup types, and visible Hoàn thành/Đóng buttons. No entry or submission. |
-| ACCOUNT-004 | Existing login and modal, existing valid fixtures plus one generated email, exact input DOM-value comparisons, boolean password retention and password-type masking, then verified header dismissal and closed-modal assertion. No form submission or account update. |
+| `build.gradle` | Project version only, to 1.1.19. |
+| `README.md` | Current counts/scope, corrected TC8/TC10 descriptions, TC11–13 commands and execution limits. |
+| `CHANGE_REPORT.md` | This report and concise commit message. |
+| `src/main/java/vn/cybersoft/vlearning/pages/AccountPage.java` | Safe input snapshots/comparisons, footer Đóng observation, protected refresh, guest navigation/content checks, shared interactability helper. |
+| `src/main/java/vn/cybersoft/vlearning/pages/LoginPage.java` | One additive nonblocking Login-form visibility reader using existing locators. |
+| `src/test/java/vn/cybersoft/vlearning/data/account/AccountSupport.java` | Password-safe observations and mutation-detected unsaved-profile cleanup. |
+| `src/test/java/vn/cybersoft/vlearning/tests/AccountTests.java` | Integrate the two exact existing correction files, then add exactly TC11–13. |
 
-All four methods are independent, with no dependsOnMethods or shared registration
-fixture storage. AccountTests contains exactly four direct @Test methods, one
-logger field and no helpers, nested types, locators, DOM parsing or randomizers.
-Browser interactions remain in Page Objects. No additional support framework,
-Account Page Object, profile-save testcase or deletion workflow was created.
+No project files were added or removed: 45 files total, seven changed and 38 unchanged
+relative to the corrected baseline (the changed-file names are also the same relative
+to the original v1.1.18 ZIP). Java AST checks preserve all ten baseline test methods
+and annotations verbatim. All existing AccountPage members are preserved except the
+behavior-equivalent extraction of the existing interactability predicate. All prior
+LoginPage members, Enrollment/My Courses methods and other test classes are preserved.
+`testng.xml` is unchanged and contains AccountTests exactly once. Test classes have
+no new reusable helper methods, raw locators, generators or DOM parsing.
 
-Personal fields are read by actual labels and their span.ml-2 values within
-`#infoPersonal.tabContent.active section.userInfo`. Readiness requires the expected
-username and populated data, avoiding empty shells and another account's response.
-Whitespace/NBSP are normalized; case, accents, punctuation and leading phone zeros
-are retained. Sidebar identity, skills/statistics and My Courses are not asserted.
+## Actual verification and observed behavior
 
-Modal locators are scoped to #myModal and reject ambiguous matches. ACCOUNT-003
-reads the observed phone **DOM attribute** `type="phone"`; the browser's corresponding
-DOM property falls back to text. ACCOUNT-004 reads input `value` properties,
-checks masking before password entry, and keeps only password equality/masking
-booleans in its snapshot. No raw password enters custom logs, failure messages or
-Allure attachments. An input that becomes unmasked is cleared before reported
-failure evidence. The modal header dismiss control was confirmed in the supplied
-DevTools capture as `type="button"` with `data-dismiss="modal"`; it cannot submit
-the form. Hoàn thành and the footer Đóng are read for visibility only.
-
-RegisterPage gains only a success-dialog disappearance wait and normal
-Register-to-Login navigation. All existing members are preserved. Public frontend
-inspection confirmed a native enabled group select with GP01 available/selected,
-and the visible enabled overlay-left **#signIn** button with text **Đăng nhập**;
-clicking that button revealed the Login form. No credentials were entered and
-no registration was submitted during this inspection.
-
-ACCOUNT-002 fails setup before submission when the expected Group is unavailable
-or selection differs. If registration authenticates automatically, existing
-HomePage logout runs before explicit new-user login. The test's generated account
-persists because the project has no verified account-deletion workflow. BaseTest
-retains final browser/session cleanup for all four methods.
-
-## File inventory and preservation
-
-**One new project file, six modified files:**
-
-| File | Reason |
+| Check | Actual outcome |
 | --- | --- |
-| `src/test/java/vn/cybersoft/vlearning/tests/AccountTests.java` — added | Exactly ACCOUNT-001–004 with existing metadata, logs and compact non-secret evidence |
-| `src/main/java/vn/cybersoft/vlearning/pages/AccountPage.java` | Add personal-information readers, route/readiness, scoped modal controls, input values and safe dismissal |
-| `src/main/java/vn/cybersoft/vlearning/pages/RegisterPage.java` | Add explicit popup-close wait and verified frontend return to Login |
-| `src/test/resources/testng.xml` | Add AccountTests exactly once and include Account in the test name; retain all five existing class entries |
-| `build.gradle` | Project version only |
-| `README.md` | Account contracts/commands, counts, architecture and current baseline/version |
-| `CHANGE_REPORT.md` | This delivery and actual validation results |
+| Syntax/package/AST checks | PASS: 32 Java files parsed; matching package paths; exactly 13 Account tests and 54 total tests. This is not full dependency/type compilation. |
+| Preservation | PASS: ten Account methods preserved against the corrected baseline; supplied TC8/TC10 source preserved; existing Page Object members compared with the documented predicate extraction. |
+| Offline support checks | PASS: 45 checks against actual AccountInput/AccountSupport using fake UI/framework dependencies. Includes no blind writes, Đóng cleanup, failure preservation, detected-mutation restoration and evidence redaction. This does not execute real Page Object DOM interactions or live TestNG/Selenium scenarios. |
+| Full Gradle compilation | BLOCKED / NOT EXECUTED. Current environment has OpenJDK 17.0.20, no Java 26, no Gradle installation/cached distribution and no installed Chrome found. The prior Wrapper download failed with `Network is unreachable`; unchanged blocked commands were not retried. |
+| TC11, TC12 and TC13 individually | NOT EXECUTED due to the same environment blockers. |
+| Full Account suite/regression | NOT EXECUTED due to the same blockers. |
+| Actual unsaved-input retention | NOT OBSERVED in a live browser. No PASS or product-defect finding is claimed. |
+| Actual guest-access behavior | NOT OBSERVED in a live browser. No redirect, denial or exposure finding is claimed. |
+| New bugs discovered | None established by live execution. Assertions retain failures if the application violates the expected behavior. |
 
-The other **36 baseline files are byte-for-byte unchanged**, including all existing
-LoginTests, RegisterTests, CourseListTests, CourseDetailTests and EnrollTests;
-BaseTest, BasePage, HomePage, LoginPage, registration fixtures/randomizers,
-EnrollInput, EnrollmentSupport, LoginSupport and Wrapper files.
+Use JDK 26 and Chrome, allow Gradle to sync, then run the compile and independent
+commands in README, followed by AccountTests. The archive has one ready-to-open
+`VLearningAutomation/` root and the complete Gradle Wrapper. Build outputs, caches
+and the temporary verification harness are excluded.
 
-AST/source comparison confirms **every existing AccountPage and RegisterPage
-member is preserved verbatim**, including openMyCourses, refreshMyCourses,
-requireCourseNotEnrolled, waitUntilCoursePresent, countExactCourseItems,
-cancelCourseIfPresent and their private exact-title/cleanup helpers.
-Existing enrollment ownership, cleanup and assertions were not edited.
-Existing Course Detail, Course List and Allure contract sections of README are
-preserved. No dependency changes or new APIs were added.
-
-## Actual validation — 2026-10-11
-
-### Compilation and browser execution
-
-All eight required checks were attempted sequentially on the available Bash host:
-
-```sh
-bash gradlew compileJava compileTestJava --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.AccountTests.accountPageShouldOpenAfterLogin --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.AccountTests.newlyRegisteredAccountShouldShowCorrectProfile --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.AccountTests.updateProfileModalShouldOpen --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.AccountTests.updateProfileInputsShouldAcceptValues --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.AccountTests --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests --console=plain --no-daemon
-bash gradlew test --console=plain --no-daemon
-```
-
-Every command exited **1 before any Gradle task started**. The Wrapper could not
-download `https://downloads.gradle.org/distributions/gradle-9.7.1-bin.zip`:
+## Suggested Git commit
 
 ```text
-Exception in thread "main" java.net.SocketException: Network is unreachable
+test(account): add unsaved-edit and guest-access coverage
 ```
-
-The available default Java is **17.0.20**. The project's **Java 26** requirement
-was retained. No dependency/type compilation, TestNG body, Chrome setup or Allure
-runtime was reached; no live Account or Enrollment result can be claimed.
-
-| Test | Compilation | Execution | Result |
-| --- | --- | --- | --- |
-| ACCOUNT-001 | Attempted; Wrapper blocked | Isolated command attempted; no TestNG execution | BLOCKED |
-| ACCOUNT-002 | Attempted; Wrapper blocked | Isolated command attempted; no TestNG execution | BLOCKED |
-| ACCOUNT-003 | Attempted; Wrapper blocked | Isolated command attempted; no TestNG execution | BLOCKED |
-| ACCOUNT-004 | Attempted; Wrapper blocked | Isolated command attempted; no TestNG execution | BLOCKED |
-| Full AccountTests | Attempted; Wrapper blocked | Class command attempted; no TestNG execution | BLOCKED |
-| Enrollment regression | Attempted; Wrapper blocked | Full EnrollTests attempted; no TestNG execution | BLOCKED |
-| Complete 45-test suite | Attempted; Wrapper blocked | Full test command attempted; no TestNG execution | BLOCKED |
-
-No authenticated live Account inspection, registration/profile consistency verdict,
-live modal entry/dismissal or enrollment cleanup/removal verification occurred.
-The provided Account DevTools screenshots ground the selectors; they are not
-screenshots of this delivery's test execution. Registration-dialog auto-close and
-auto-authentication behavior remain unverified live. No product defect was
-confirmed and no live account state was mutated during validation.
-
-### Separate source and offline checks
-
-- All **30 Java sources** passed syntax parsing; 34 existing direct Course Detail
-  XPaths compiled. This is not dependency/type or Java 26 compilation.
-- AST/file checks verified four direct Account @Test methods, no helpers/nested
-  types/locators, 45 total methods, untouched existing tests, additive Page Object
-  members, unchanged fixtures/randomizers/dependencies and one suite entry.
-- A dependency-stub slice compiled under the available Java 17 and passed
-  **20 offline Account safety checks**. Actual AccountTests, AccountPage,
-  RegisterPage, HomePage and registration randomizers ran against fake browser
-  and framework dependencies. Checks covered exact registration-pair reuse and
-  explicit registration-password login, auto-authentication/logout branch,
-  unavailable/mismatched Group, email case mismatch, labeled/normalized data,
-  leading zero, wrong-user/empty response rejection, modal/input uniqueness,
-  raw phone attribute, DOM-value acceptance, dismissal after value mismatch,
-  pre-entry masking, clearing an unmasked secret, failed dismissal and secret-free
-  custom evidence. No network, backend registration or update occurred.
-- The unchanged prior Enrollment safety fixture passed **23 offline checks**
-  against the updated AccountPage. It exercised existing exact-title lookup,
-  duplicate counts, owned-course protection, independent cleanup, removal failure,
-  primary failure preservation and existing TC1/TC4/TC5/TC6/TC7 callers.
-
-Offline checks are **not live Selenium/TestNG/Allure PASS results** and do not replace
-the required JDK 26/dependency compilation or real browser regression run.
-README contains the precise PowerShell commands for validation on a supported host.
-
-## Delivery
-
-`VLearningAutomation-v1.1.16-AccountTC1-TC4.zip` contains the complete **43-file**
-project under one `VLearningAutomation` folder, ready to open in IntelliJ.
-Validation fixtures, images, helper scripts, logs, IDE files, caches and build
-output are excluded. Archive CRC and every source file's byte equality are checked
-before delivery. Configure JDK 26 and Chrome and allow the existing Wrapper and
-dependency downloads before executing the live validation commands.
