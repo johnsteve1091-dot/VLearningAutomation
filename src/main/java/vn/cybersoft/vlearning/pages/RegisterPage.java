@@ -42,6 +42,9 @@ public class RegisterPage extends BasePage {
 
     private static final By SUCCESS_POPUP =
             By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Đăng kí thành công']");
+    private static final By REGISTRATION_DIALOG = By.cssSelector("div.swal-modal[role='dialog']");
+    private static final By LOGIN_PANEL_BUTTON = By.xpath("//div[contains(@class,'overlay-panel')"
+            + " and contains(@class,'overlay-left')]//button[@id='signIn' and normalize-space()='Đăng nhập']");
     private static final By EXISTING_ACCOUNT_POPUP =
             By.xpath("//div[contains(@class,'swal-modal')]//div[contains(@class,'swal-title') and normalize-space()='Tài khoản đã tồn tại!']");
     private static final By EXISTING_EMAIL_POPUP =
@@ -49,6 +52,16 @@ public class RegisterPage extends BasePage {
 
     public RegisterPage(WebDriver driver) {
         super(driver);
+    }
+
+    public void waitUntilRegistrationPopupClosed() {
+        getWait().until(ExpectedConditions.invisibilityOfElementLocated(REGISTRATION_DIALOG));
+    }
+
+    /** Return through the observed Register overlay button, without reloading the page. */
+    public LoginPage goToLoginPage() {
+        click(LOGIN_PANEL_BUTTON);
+        return new LoginPage(driver);
     }
 
     public boolean isRegisterTitleDisplayed() {

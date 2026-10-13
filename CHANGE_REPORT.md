@@ -1,183 +1,145 @@
-# VLearningAutomation — v1.1.15
+# VLearningAutomation v1.1.19 — ACCOUNT-011 through ACCOUNT-013
 
-## Baseline comparison
+## Baseline and preserved corrections
 
-Fresh GitHub main was inspected first, followed by the current local project.
-GitHub still reports **v1.1.10**, tree
-`411ea3f139739f72ec1b5011e73255a51de45f35`, with ENROLL-001 only.
-Local **v1.1.14** contains ENROLL-001–005, guest redirect/return, refresh
-persistence, and application logout/login persistence. Its 42 files matched the
-previous v1.1.14 delivery ZIP byte for byte.
+GitHub main was checked on 2026-10-13: still v1.1.15 at
+`964b5d9095d0b1a6bf539918ef82119e2efd9dd9`. It predates the local Account work.
+The latest complete accessible archive is v1.1.18, with SHA-256
+`7107140dabdea3aad95cfec23929b30ed4753a2fcd891bba36aedc74e05c4189`.
+Its extracted source was verified byte-for-byte against that archive.
 
-Nine local files differ from GitHub: build.gradle, README, CHANGE_REPORT,
-AccountPage, CourseDetailPage, HomePage, LoginPage, EnrollmentSupport and
-EnrollTests. The other 33 files match GitHub; neither side has additional files.
-The current local version was authoritative. No older GitHub source replaced it.
+That archive predates two subsequent corrections. Both exact source files were
+recovered and integrated verbatim before creating the working baseline:
 
-Project version increments once: **1.1.14 → 1.1.15**. Dependency, Wrapper,
-Java 26 and Allure versions remain unchanged.
+- `ACCOUNT-008-fixed-method.java.txt`: four independent single-empty-field submissions.
+- `ACCOUNT-010-fixed-method.java.txt`: four independent single-invalid-field submissions.
 
-## ENROLL-006 — Same Course twice
+The correction methods were not reconstructed from descriptions. Their existing
+names, assertions, close/refresh workflows and failure behavior remain intact.
+ACCOUNT-001–007 and ACCOUNT-009 remain as in v1.1.18; the supplied corrected
+ACCOUNT-008/010 remain unchanged. The new work adds exactly three methods.
 
-Maps **TC_ENR_010 + TC_ENR_011**. The test logs in using existing EnrollInput
-credentials, selects one healthy rendered Course through the existing first
-category/card path, and captures its category, href and normalized stikerCard name.
-The read-only My Courses absence guard runs before acquiring ownership.
+Version increments once: **1.1.18 → 1.1.19**. There are **13 Account tests** and
+**54 TestNG methods overall**. Java 26, Selenium 4.49.0, TestNG 7.12.0, Gradle 9.7.1,
+Log4j and Allure dependencies remain unchanged. No push or merge was performed.
 
-The first enrollment's exact success title and initial My Courses presence are
-setup guards. The test returns through the captured category to the same card,
-clicks Đăng ký a second time and performs exactly two business assertions:
+## Implemented tests
 
-1. The generic popup reader returns **`Đã đăng ký khóa học này rồi!`**,
-   centralized as `EnrollInput.DUPLICATE_TITLE`.
-2. After the popup closes, `AccountPage.countExactCourseItems(name)` returns
-   exactly **1**.
+| Test / group | Method | Implemented behavior |
+| --- | --- | --- |
+| ACCOUNT-011 / account-tc11 | `unsavedProfileChangesShouldBeDiscarded` | Capture originals; generate different valid Name/Email/Phone; enter all three and the existing password; verify inputs/masking; click Đóng; observe closure/no update response/Account route; reopen and assert discarded inputs; Đóng again; refresh and compare originals. |
+| ACCOUNT-012 / account-tc12 | `individualUnsavedProfileChangesShouldBeDiscarded` | Four independent Name, Password, Email and Phone attempts. Verify fresh baseline, change only the selected field, compare the other three with their captured states, Đóng/reopen/inspect, then Đóng and refresh before the next attempt. Aggregate retention failures while safe. |
+| ACCOUNT-013 / account-tc13 | `guestShouldNotAccessPersonalInformation` | Confirm the fresh browser is guest, navigate directly to the supplied Account URL, wait for a conclusive loaded state, and inspect actual protected data and editing controls. No authentication or account edit action is performed. |
 
-The new count operation uses exact normalized visible h6 title text inside the
-existing My Courses item locator. It returns duplicate counts rather than throwing
-the unique-match cleanup guard. Whitespace/NBSP are normalized; case, accents and
-quotes remain meaningful. It does not count unrelated items or build dynamic XPath.
-The existing enrollment button, popup reader and explicit popup-close wait are reused;
-CourseDetailPage is unchanged. Duplicate body text is not asserted.
+TC11/12 use only `EnrollInput.ACCOUNT` / `EnrollInput.PASSWORD` and the three
+original profile values read at runtime. Replacement values reuse
+`AccountInput.differentValidProfile`, including the existing Register email generator.
+No new generator, password, credentials or hardcoded original profile was added.
+Empty reopened profile inputs or restored original values are accepted; replacement
+values or other unexpected values fail. Unsaved password retention fails; no
+intentional prefill exception has been verified or silently added.
 
-## ENROLL-007 — Two different Courses together
+TC12 verifies every fresh form after refresh. Password equality against a captured
+baseline is computed inside AccountPage; there is no password value accessor or
+password text in snapshot string representations. If the Password baseline already
+equals the intended input, the test fails its prerequisite rather than claiming an
+actual change was tested. Retention defects do not stop the other field attempts
+when closing and refresh still establish safe, original state. Stored mutation or
+another unsafe prerequisite stops execution with prior failures preserved.
 
-Maps **TC_ENR_006** and enrolls **two Courses**, A and B.
-A's absence guard precedes its attempt. Both success titles are setup guards.
-B is checked independently for pre-existing enrollment before its own attempt;
-A is expected to be enrolled by then.
+## Minimal Page Object and support changes
 
-CourseCategoryPage's existing first-course selector delegates to one shared card
-selection implementation. The new distinct-course operation applies the same
-visible-card, valid Detail href and nonblank visible stikerCard rules, skipping A's
-normalized href and title. A different title is also necessary because My Courses
-provides names rather than useful IDs.
+The supplied footer Đóng locator is reused. New close operations never substitute
+header X, Escape, refresh, JavaScript hiding or Hoàn thành. Before clicking, the
+Page Object checks that Đóng is not an associated native form-submit control.
+If it is, the non-submitting scenario fails before an unsafe click. Normal close
+uses WebDriver click and explicit waits for hidden modal plus an interactable
+Cập nhật control. It observes at least two seconds, with 500 ms stable state and
+100 ms polling within the existing 15-second limit; popup titles are retained.
+The existing read-only hit-test logic was extracted for reuse without changing
+its previous behavior. Refresh is refused while the modal is still visible.
 
-HomePage tries the same rendered category, then at most the first other discovered
-category. Selection stops at the first usable B. No pagination, fixed course
-identity, direct navigation shortcut, API or catalog sweep was added.
-The bounded search fails setup clearly if no unambiguous distinct B is found;
-it makes no claim to inspect every category.
+No normal TC11/12 path calls the update-submit method. Button semantics, observed
+popup state and stored-data comparisons provide UI evidence; HTTP update requests
+are not intercepted or counted. A custom application handler that silently sends
+a request cannot be ruled out solely by this DOM observation.
 
-After B succeeds and the popup closes, exactly two business assertions verify
-exact A presence and exact B presence in the same My Courses state.
+Cleanup first checks persisted values. It calls the existing UI restoration mechanism
+only after detecting a difference from the original snapshot. Successful restoration
+does not turn the mutation into a PASS. A broken Đóng does not trigger an alternate
+dismissal or blind update. Cleanup/restoration failures remain separate from the
+primary assertion failure. No course or unrelated account operation was changed.
 
-## Ownership, cleanup and preservation
+Guest checks reuse Account locators and the Login form's existing vault locators.
+LoginPage gains one nonblocking read-only observation method; no existing Login
+method or test changes. A visible Login form is accepted at any URL. An actual
+HTTP 401/403 document response is an alternative denial signal, provided no protected
+content is accessible. The browser's existing navigation entry supplies this status;
+no second HTTP/API request is sent. Missing/zero status, blank content, loading state
+or an unrecognized denial screen is not accepted as proof of access protection.
+The code retains protected-data/editing exposure observed during polling, even if
+later navigation hides it. This is bounded browser observation, not a security audit
+of every server endpoint or every possible denial UI.
 
-TC6 sets its attempt flag immediately before the first enrollment click, after
-the absence guard. TC7 appends each exact name to its owned list immediately before
-that Course's click, after its respective absence guard. Thus accepted requests
-can still be cleaned when a response, setup guard or business assertion fails.
-Names selected but not attempted never become owned.
+Browser API reference for the optional HTTP-denial observation:
+[PerformanceResourceTiming.responseStatus](https://developer.mozilla.org/en-US/docs/Web/API/PerformanceResourceTiming/responseStatus),
+inherited by PerformanceNavigationTiming. Unsupported/hidden status is treated as unknown.
 
-EnrollmentSupport now accepts a list of owned names and tries each cleanup
-independently. A failure cancelling or verifying removal of A does not skip B.
-The existing unique exact-title cancellation and removal verification remain
-unchanged. Pre-existing, similarly named and unrelated Courses are never cancelled.
+## Evidence and privacy
 
-Original failures remain primary; independent cleanup/evidence failures are
-suppressed on them. Cleanup failure after scenario success fails the testcase.
-Logs and one compact cleanup attachment identify each Course and its outcome.
-A failure screenshot is retained before cancellation where available.
+TC11 records originals, intended/entered values, both Đóng results, reopened values
+and refreshed stored values. TC12 records the same observations separately for each
+of its four attempts, including untouched-field comparisons. TC13 records initial
+guest state, requested/final URLs, Login/Account visibility, personal-panel access,
+protected-value exposure, editing availability and settlement/denial evidence.
 
-If a duplicate-enrollment defect creates multiple exact-title items, TC6 can
-observe count 2. Existing cleanup deliberately refuses ambiguous cancellation,
-preserves the count assertion and reports cleanup failure. This is a safety
-limitation, not a live product-defect finding from this environment.
+Password comparisons are boolean; snapshots never print password text. New evidence
+and exceptions redact the existing password. Account and Login implementation retains
+its masking checks. No runtime screenshot or Allure result is included in this ZIP
+because no live browser test was executed here.
 
-**EnrollmentSupport performs no login, logout, cookie/storage clearing or driver
-quit.** BaseTest retains final browser/session teardown.
-
-The actual v1.1.14 support helper contained optional login recovery for TC4/TC5,
-which conflicts with the new no-login support requirement. Recovery was moved
-to the existing `LoginSupport.restoreSessionForCleanup(...)` operation.
-Only TC4/TC5's `finally` orchestration changed to call that operation before
-cancellation and preserve restoration errors. Their annotations and scenario
-code before `finally` remain byte-for-byte unchanged. TC5 still performs real
-application logout once as its scenario step, and can restore its session for
-owned-course cancellation after a failed second login.
-
-TC1–TC3 complete declarations and bodies remain byte-for-byte unchanged.
-Existing AccountPage methods, HomePage.logoutIfAuthenticated, LoginPage,
-CourseDetailPage, BaseTest, credentials and testng.xml are preserved.
-EnrollTests has **seven direct methods, all @Test**, with no helpers, nested
-types, raw locators, DOM parsing or URL-normalization logic added.
-The complete project now has **41 TestNG methods**.
-
-## Files changed
-
-**New project files: none.** Ten files modified relative to local v1.1.14:
+## Exact changed-file inventory
 
 | File | Change |
 | --- | --- |
-| `src/test/java/vn/cybersoft/vlearning/tests/EnrollTests.java` | TC6/TC7; necessary TC4/TC5 cleanup recovery relocation |
-| `src/test/java/vn/cybersoft/vlearning/data/enroll/EnrollInput.java` | Exact current duplicate title constant |
-| `src/test/java/vn/cybersoft/vlearning/data/enroll/EnrollmentSupport.java` | Independently clean owned Course names; remove login |
-| `src/test/java/vn/cybersoft/vlearning/data/login/LoginSupport.java` | Existing TC4/TC5 login recovery moved here |
-| `src/main/java/vn/cybersoft/vlearning/pages/AccountPage.java` | Observable exact visible-title item count |
-| `src/main/java/vn/cybersoft/vlearning/pages/CourseCategoryPage.java` | Shared selector with distinct-course exclusion |
-| `src/main/java/vn/cybersoft/vlearning/pages/HomePage.java` | Bounded same/one-other-category selection |
-| `build.gradle` | Project version only |
-| `README.md` | Enrollment cases, mappings, counts, run order and version |
-| `CHANGE_REPORT.md` | This delivery and actual validation |
+| `build.gradle` | Project version only, to 1.1.19. |
+| `README.md` | Current counts/scope, corrected TC8/TC10 descriptions, TC11–13 commands and execution limits. |
+| `CHANGE_REPORT.md` | This report and concise commit message. |
+| `src/main/java/vn/cybersoft/vlearning/pages/AccountPage.java` | Safe input snapshots/comparisons, footer Đóng observation, protected refresh, guest navigation/content checks, shared interactability helper. |
+| `src/main/java/vn/cybersoft/vlearning/pages/LoginPage.java` | One additive nonblocking Login-form visibility reader using existing locators. |
+| `src/test/java/vn/cybersoft/vlearning/data/account/AccountSupport.java` | Password-safe observations and mutation-detected unsaved-profile cleanup. |
+| `src/test/java/vn/cybersoft/vlearning/tests/AccountTests.java` | Integrate the two exact existing correction files, then add exactly TC11–13. |
 
-The other **32 project files are byte-for-byte unchanged**. Unrelated README
-Course Detail, Course List and Allure sections remain unchanged.
+No project files were added or removed: 45 files total, seven changed and 38 unchanged
+relative to the corrected baseline (the changed-file names are also the same relative
+to the original v1.1.18 ZIP). Java AST checks preserve all ten baseline test methods
+and annotations verbatim. All existing AccountPage members are preserved except the
+behavior-equivalent extraction of the existing interactability predicate. All prior
+LoginPage members, Enrollment/My Courses methods and other test classes are preserved.
+`testng.xml` is unchanged and contains AccountTests exactly once. Test classes have
+no new reusable helper methods, raw locators, generators or DOM parsing.
 
-## Actual validation — 2026-10-10
+## Actual verification and observed behavior
 
-All nine requested commands were attempted sequentially:
-
-```sh
-bash gradlew compileJava compileTestJava --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.duplicateEnrollmentShouldBePrevented --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.differentCoursesShouldCoexistInMyCourses --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.healthyCourseShouldEnrollAndAppearInMyCourses --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.guestEnrollmentShouldRedirectToLogin --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.guestLoginShouldReturnToSameCourseDetail --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterMyCoursesRefresh --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests.enrolledCourseShouldPersistAfterLogoutAndLogin --console=plain --no-daemon
-bash gradlew test --tests vn.cybersoft.vlearning.tests.EnrollTests --console=plain --no-daemon
-```
-
-Every command exited **1 before any Gradle task started**. The Wrapper could not
-download `https://downloads.gradle.org/distributions/gradle-9.7.1-bin.zip`,
-reporting `java.net.SocketException: Network is unreachable`.
-The environment's default Java is **17.0.20**; the project's **Java 26**
-requirement was retained.
-
-| Requested check | Actual result |
+| Check | Actual outcome |
 | --- | --- |
-| Production/test compilation | Attempted; blocked during Gradle bootstrap |
-| ENROLL-006 alone | Attempted; no TestNG/live duplicate-enrollment verdict |
-| ENROLL-007 alone | Attempted; no TestNG/live two-course verdict |
-| ENROLL-001 alone | Present; attempted; no TestNG execution |
-| ENROLL-002 alone | Present; attempted; no TestNG execution |
-| ENROLL-003 alone | Present; attempted; no TestNG execution |
-| ENROLL-004 alone | Present; attempted; no TestNG execution |
-| ENROLL-005 alone | Present; attempted; no TestNG execution |
-| Full EnrollTests | Attempted; no TestNG execution |
-| Live exact cancellation/removal | Not reached |
-| Chrome and Allure runtime | Not reached |
-| Live Course B availability / duplicate popup close | Unverified |
-| Product defect | No live verdict; no account state was changed |
+| Syntax/package/AST checks | PASS: 32 Java files parsed; matching package paths; exactly 13 Account tests and 54 total tests. This is not full dependency/type compilation. |
+| Preservation | PASS: ten Account methods preserved against the corrected baseline; supplied TC8/TC10 source preserved; existing Page Object members compared with the documented predicate extraction. |
+| Offline support checks | PASS: 45 checks against actual AccountInput/AccountSupport using fake UI/framework dependencies. Includes no blind writes, Đóng cleanup, failure preservation, detected-mutation restoration and evidence redaction. This does not execute real Page Object DOM interactions or live TestNG/Selenium scenarios. |
+| Full Gradle compilation | BLOCKED / NOT EXECUTED. Current environment has OpenJDK 17.0.20, no Java 26, no Gradle installation/cached distribution and no installed Chrome found. The prior Wrapper download failed with `Network is unreachable`; unchanged blocked commands were not retried. |
+| TC11, TC12 and TC13 individually | NOT EXECUTED due to the same environment blockers. |
+| Full Account suite/regression | NOT EXECUTED due to the same blockers. |
+| Actual unsaved-input retention | NOT OBSERVED in a live browser. No PASS or product-defect finding is claimed. |
+| Actual guest-access behavior | NOT OBSERVED in a live browser. No redirect, denial or exposure finding is claimed. |
+| New bugs discovered | None established by live execution. Assertions retain failures if the application violates the expected behavior. |
 
-All **29 Java sources passed syntax parsing**, including direct Course Detail
-XPath compilation. AST/file checks verify test-only architecture, unchanged TC1–TC3,
-TC4/TC5 preservation before their finalizers, exact assertion counts, additive
-Page Object changes and unchanged dependencies/unrelated files.
+Use JDK 26 and Chrome, allow Gradle to sync, then run the compile and independent
+commands in README, followed by AccountTests. The archive has one ready-to-open
+`VLearningAutomation/` root and the complete Gradle Wrapper. Build outputs, caches
+and the temporary verification harness are excluded.
 
-An isolated dependency-stub slice compiled and passed **23 offline safety checks**.
-It exercised actual EnrollTests, AccountPage, HomePage, CourseCategoryPage,
-EnrollmentSupport and LoginSupport using fake browser/framework dependencies.
-Checks covered duplicate count 2, exact visible quoted/normalized titles, shared
-healthy-card selection, bounded B fallback, ownership before clicks, pre-existing
-Course protection, partial enrollment, independent A/B cleanup, missing removal,
-primary-error preservation, TC1 compatibility and TC4/TC5 scenario/recovery behavior.
+## Suggested Git commit
 
-These results are **not** project dependency/type compilation, Java 26 compilation,
-Selenium/TestNG/Allure runtime execution or live-site PASS results.
-The ZIP contains 42 project files under one VLearningAutomation folder. Offline
-fixtures, logs, caches and build output are excluded. Archive CRC and source-byte
-matching were verified. README includes the live-validation commands for an
-environment with JDK 26, Chrome and required downloads.
+```text
+test(account): add unsaved-edit and guest-access coverage
+```
