@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.19
+# VLearningAutomation — v1.1.21
 
-Cybersoft V Learning Selenium capstone. The active source contains **54 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **61 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -9,8 +9,9 @@ methods**:
 | RegisterTests | 14 | Existing Register scenarios and smoke test |
 | CourseListTests | 10 | TC1 URL integrity, TC2 subCard structure, TC3 subCard content, TC4 main-card content |
 | CourseDetailTests | 5 | TC1 core, TC2 curriculum, TC3 related-card content, TC4 navigation, TC5 frontend consistency |
-| EnrollTests | 7 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence; ENROLL-006 duplicate protection; ENROLL-007 two distinct courses |
-| AccountTests | 13 | ACCOUNT-001 navigation; ACCOUNT-002 registered profile; ACCOUNT-003 modal controls; ACCOUNT-004 input retention; ACCOUNT-005 unchanged profile submission; ACCOUNT-006 changed profile persistence and restoration; ACCOUNT-007/009 rejection; ACCOUNT-008/010 isolated field validation; ACCOUNT-011/012 unsaved edits; ACCOUNT-013 guest protection |
+| EnrollTests | 8 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence; ENROLL-006 duplicate protection; ENROLL-007 two distinct courses; ENROLL-008 re-enrollment after cancellation |
+| AccountTests | 16 | ACCOUNT-001 navigation; ACCOUNT-002 registered profile; ACCOUNT-003 modal controls; ACCOUNT-004 input retention; ACCOUNT-005 unchanged profile submission; ACCOUNT-006 changed profile persistence and restoration; ACCOUNT-007/009 rejection; ACCOUNT-008/010 isolated field validation; ACCOUNT-011/012 unsaved edits; ACCOUNT-013 guest blank page; ACCOUNT-014 account switching; ACCOUNT-015 stale profile actions; ACCOUNT-016 stale cancellation and owned cleanup |
+| CancelTests | 3 | CANCEL-001 exact cancellation; CANCEL-002 preserve B and original Courses; CANCEL-003 cancellation persists after refresh |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -25,8 +26,8 @@ report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
 2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
 3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
-4. Run each Account method independently, then AccountTests, EnrollTests and the
-   full suite. Existing Course Detail and Enrollment scenarios remain available below.
+4. Run each new Cancellation/Enrollment method independently using the commands below,
+   then CancelTests, EnrollTests and the full suite. Existing departments remain registered.
 
 PowerShell, from the project root:
 
@@ -63,17 +64,79 @@ Run Course Detail TC2 independently with:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 54 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 61 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
 registration; their existing behavior and fixtures are preserved. ENROLL-001, TC4,
-TC5, TC6 and TC7 mutate account state and must complete targeted cleanup before another run.
+TC5, TC6, TC7, TC8 and CANCEL-001–003 mutate account state and must complete targeted cleanup before another run.
+
+## Cancellation tests and ENROLL-008
+
+| Case / group | Business assertion |
+| --- | --- |
+| CANCEL-001 / `cancel-tc1` | Enroll one absent Course; require the exact existing success title, one My Courses entry and an available exact cancellation control; cancel it and assert zero entries plus unchanged original Courses. |
+| CANCEL-002 / `cancel-tc2` | Capture the account's original Course identities/counts, then enroll distinguishable A/B. After cancelling only A, require A=0, B=1 and every original Course count unchanged. Finally remove owned B (and A if needed). |
+| CANCEL-003 / `cancel-tc3` | Enroll, verify one entry, cancel and require zero; refresh through `AccountPage.refreshMyCourses`, wait for the expected account response and active panel, and require zero again plus the original Course baseline. |
+| ENROLL-008 / `enroll-tc8` | Enroll A, cancel A, return through its captured category/href/name, enroll the same A again, and require the exact success title and one entry. Finally remove owned A. |
+
+Each method starts with BaseTest's fresh Chrome session and the existing confirmed
+Enrollment account. `CancellationSupport` captures a read-only baseline before any
+mutation. Frontend discovery excludes existing Course names and previously selected
+names/hrefs; setup fails clearly if no eligible Course is found. No existing
+Course is cancelled to make room. Existing exact normalized name matching is used
+in My Courses; the captured href/name is used to revisit the original frontend card.
+No Course IDs, new locators or cancellation-popup text are introduced.
+
+Ownership is recorded immediately before **each** enrollment click, including the
+second ENROLL-008 attempt, and is retained across cancellation. Every method uses
+`finally` cleanup. Before recovery/navigation, a primary failure screenshot is
+attached; safe logs and Allure snapshots record selected identities and Course counts.
+Cleanup restores the existing account session when needed and delegates owned titles
+to unchanged `EnrollmentSupport.finish`, which attempts each title independently.
+Ambiguous exact matches are rejected. Pre-existing titles are never cleanup targets.
+An unrelated snapshot/evidence failure does not skip exact-title cleanup of other
+owned Courses. A refreshed final snapshot must contain zero owned entries and match
+the original per-Course counts. Missing originals are reported, never recreated to
+hide collateral damage. Cleanup failures are suppressed on a primary failure or fail
+an otherwise successful test. Do not run concurrent account-mutating sessions.
+
+A temporarily empty panel is insufficient evidence of absence: snapshots require
+the expected account's populated response, the active Courses panel, and valid
+rendered titles for every Course row. This reuses the existing Account readiness
+contract. Live application behavior and cancellation persistence still require the
+configured browser run; no new loading selector or API shortcut is assumed.
+
+Run each new case independently (PowerShell):
+
+```powershell
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CancelTests.enrolledCourseShouldBeCancelled"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CancelTests.cancellingOneCourseShouldPreserveOtherCourses"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CancelTests.cancelledCourseShouldRemainAbsentAfterRefresh"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.cancelledCourseShouldAllowReenrollment"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CancelTests" --tests "vn.cybersoft.vlearning.tests.EnrollTests.cancelledCourseShouldAllowReenrollment"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
+.\gradlew.bat test
+```
+
+Linux/macOS: replace `.\gradlew.bat` with `bash gradlew`. Groups are available to
+TestNG; the commands above use existing Gradle method/class filtering without adding
+new build configuration.
+
+**v1.1.21 verification:** source/AST preservation, package/import references, suite
+registration and ZIP checks passed. **56 focused offline checks passed** with
+simulated dependencies/UI, including the four scenario bodies and cleanup failures.
+The complete `compileJava compileTestJava` attempt was **BLOCKED** before compilation:
+the Wrapper download failed with `Network is unreachable`. This environment also
+lacks JDK 26 and Chrome. The four new live tests, Enrollment regression and full suite
+were **not run**; no live PASS or application defect is claimed. Full details and
+limitations are in `CHANGE_REPORT.md`.
 
 ## Account tests
 
-Account contains thirteen independent methods in `AccountTests`; each starts with the fresh
-Homepage browser supplied by BaseTest. The existing Enrollment account is used only
-for ACCOUNT-001, ACCOUNT-003, ACCOUNT-004, ACCOUNT-005 and ACCOUNT-007–012. ACCOUNT-006 uses the dedicated `testergroup7` fixture in `AccountInput`.
+Account contains sixteen independent methods in `AccountTests`; each starts with the fresh
+Homepage browser supplied by BaseTest. The existing Enrollment account is used for ACCOUNT-001, ACCOUNT-003–005,
+ACCOUNT-007–012, User A in ACCOUNT-014 and ACCOUNT-016. ACCOUNT-006 and ACCOUNT-015
+use the dedicated `testergroup7` fixture, also User B in ACCOUNT-014.
 
 | Test | Behavior and assertions |
 | --- | --- |
@@ -87,15 +150,18 @@ for ACCOUNT-001, ACCOUNT-003, ACCOUNT-004, ACCOUNT-005 and ACCOUNT-007–012. AC
 | ACCOUNT-008 | Four isolated submissions with one empty field and three original valid values. Check its exact required warning, close and refresh after each. Wrong Password wording remains a failure. |
 | ACCOUNT-009 | Reuse the four invalid Register fixtures, verify entered values, submit once and verify rejection and unchanged originals after refresh. No exact wording assertions. |
 | ACCOUNT-010 | Four isolated submissions with one invalid field and three original valid values. Verify its format warning, close and refresh after each. Incorrect Phone spelling remains a failure. |
-| ACCOUNT-011 | Enter three different valid profile values and the existing password; Đóng; reopen and check discarded inputs; Đóng again; refresh and compare the original stored profile. |
+| ACCOUNT-011 | Enter three different valid profile values and the existing password; Đóng; reopen and verify the unsaved draft is retained; Đóng again; refresh and compare the original stored profile. |
 | ACCOUNT-012 | Four independent Name/Password/Email/Phone attempts. Change only one input, verify the other three are untouched, Đóng, reopen and check retention, Đóng and refresh before the next attempt. |
-| ACCOUNT-013 | Remain guest and directly open the supplied Account URL. Require a loaded Login or HTTP access-denied state, and verify no protected values, personal panel or usable editing controls are exposed. |
+| ACCOUNT-013 | Preserve the corrected short flow: open Account as guest and assert body text is blank. |
+| ACCOUNT-014 | Login A, verify labeled identity and capture profile; actual logout; Login B, verify B rather than A; refresh and compare B's six captured values. |
+| ACCOUNT-015 | Seven independent same-browser two-tab arrangements: four inputs, Cập nhật, Hoàn thành, Đóng. Logout in B; observe selected action in A; freshly log in, refresh and verify the original three stored values. Restore detected mutations while retaining failure. |
+| ACCOUNT-016 | Select an absent exact Course and enroll it for this test. Logout in B, attempt exact cancellation once in A, then verify count=1 after fresh login/refresh. Finally perform authorized cleanup and verify refreshed count=0. |
 
 Profile values are read by their associated labels inside the active Personal
 Information section. Whitespace/NBSP are normalized; case, accents, punctuation
 and leading phone zeros remain meaningful. Readers wait for the expected user's
-populated response. Sidebar identity, learning statistics and My Courses are outside
-these Account cases. The raw phone markup is `type="phone"`; browsers expose its
+populated response. Decorative sidebar identity and learning statistics are not
+authenticated identity. ACCOUNT-016 uses the existing My Courses exact-title operations. The raw phone markup is `type="phone"`; browsers expose its
 unsupported type property as `text`, so ACCOUNT-003 reads the DOM attribute.
 
 ACCOUNT-002 keeps its own generated inputs and does not use cross-test static
@@ -108,7 +174,7 @@ A created account persists because no verified deletion workflow exists.
 ACCOUNT-004 checks masking before typing and exposes no raw password in snapshots,
 assertion messages, logs or custom attachments. The header dismiss button is confirmed
 as `type="button"` with `data-dismiss="modal"`, so dismissal does not submit the form.
-BaseTest retains normal session cleanup and browser quit for all thirteen cases.
+BaseTest retains normal session cleanup and browser quit for all sixteen cases.
 
 ACCOUNT-005/006 read only Full Name, Email and Phone into a password-free snapshot.
 They reuse the existing modal entry operation and verify `Cập nhật thành công` in
@@ -123,7 +189,7 @@ generated, captured in profile snapshots or written to custom evidence.
 
 `AccountSupport` restores after a submission attempt, including business failures.
 It refreshes and verifies the original three fields, recovers an expired login
-through existing Page Objects when necessary, and never touches courses. A cleanup
+through existing Page Objects when necessary. Its profile-restoration operation never touches courses. A cleanup
 failure is attached to the original failure; if business assertions passed, cleanup
 failure fails the test separately. No profile cleanup is added to ACCOUNT-005.
 
@@ -153,12 +219,41 @@ Retention mismatches remain failures even when later attempts complete. Cleanup
 checks actual persisted values and invokes existing UI restoration only if it
 finds a mutation; normal runs submit no update.
 
-ACCOUNT-013 uses BaseTest's fresh browser and never logs in. It inspects Login,
-Account, Personal Information, profile values and editing controls after direct
-navigation. A visible Login form can appear at any URL; a confirmed document HTTP
-401/403 is also accepted when protected content is inaccessible. Missing status,
-blank/loading content or an unrecognized denial page is not proof of protection.
-No API request, cookie/token injection or guessed access-denied locator is used.
+ACCOUNT-011 retains its existing method name `unsavedProfileChangesShouldBeDiscarded`,
+but the corrected GitHub assertions require draft retention. ACCOUNT-012's corrected
+method is `individualUnsavedProfileChangesShouldBeRetained`. Both are preserved verbatim.
+ACCOUNT-013 is the corrected immediate blank-body check; no old HTTP/redirect polling
+has been reintroduced.
+
+ACCOUNT-014 compares labeled account identifiers. It does not assume the users must
+have different names, emails or phone numbers, and never edits either profile.
+
+ACCOUNT-015 runs seven stages in enum order: Full Name, Password, Email, Phone,
+Cập nhật, Hoàn thành, Đóng. Every stage starts with a fresh normal login and original
+stored values, opens a second tab with `WindowType.TAB`, verifies the shared account,
+and uses application logout there. Tab A is untouched until the selected action.
+For input stages, the other three fields are prepared before logout. Only a complete,
+valid draft may then be submitted. The dedicated Hoàn thành draft changes exactly
+one profile field; the existing password is always unchanged. Cập nhật only checks
+the stale button/modal behavior, and Đóng only checks closing an unsaved draft.
+
+The new stale-page observer polls for at most two seconds and ends immediately on
+blank body text. Evidence distinguishes a blank screen before the action from blank
+rendering afterward. It records control/modal state, known validation/popup text,
+URL transitions and whether the action was reached. No invisible form is searched
+after a blank result. A blank UI is not proof of server-side token revocation: every
+stage still performs fresh-login/refresh profile verification. Only detected stored
+changes invoke existing restoration; successful restoration does not erase failure.
+
+ACCOUNT-016 tries an existing suitable selection and, if already enrolled, one
+different candidate through the existing selector. If both are owned already, setup
+fails without modifying them. Ownership starts only after an absence guard,
+immediately before enrollment. Stale cancellation clicks only a unique exact-title
+course control once, without waiting for removal. The final count after fresh login
+must be one. Cleanup reauthenticates the original owner, reuses `EnrollmentSupport.finish`
+when the owned Course remains, and checks zero again after refresh. An already absent
+Course is never reenrolled; the original security failure remains. Evidence failures
+must not prevent data cleanup. Secondary tabs close even after failures.
 
 PowerShell, from the project root:
 
@@ -175,29 +270,34 @@ PowerShell, from the project root:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.invalidProfileUpdateShouldBeRejected"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.formatWarningsShouldClearIncrementally"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.unsavedProfileChangesShouldBeDiscarded"
-.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.individualUnsavedProfileChangesShouldBeDiscarded"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.individualUnsavedProfileChangesShouldBeRetained"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.guestShouldNotAccessPersonalInformation"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.accountSwitchShouldDisplayCorrectUser"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.loggedOutTabShouldNotUpdateProfile"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests.loggedOutTabShouldNotCancelEnrolledCourse"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests"
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests"
 .\gradlew.bat test
 ```
 
-On Linux/macOS, replace `.\gradlew.bat` with `bash gradlew`. Full compilation and
-browser runs for v1.1.19 were **not executed**: the unchanged environment has Java 17,
-no Java 26 or Chrome installation and no cached Gradle distribution. The previous
-Wrapper attempt failed with `Network is unreachable`; it was not retried without a
-changed condition. Static parsing and 45 offline support checks passed; neither is a
-live Selenium PASS. See `CHANGE_REPORT.md` for the exact validation status.
+On Linux/macOS, replace `.\gradlew.bat` with `bash gradlew`.
+Historical v1.1.20 validation: the wrapper compilation attempt was **blocked** by an unreachable Gradle
+download. This environment also lacks Java 26 and Chrome. No new test or Account
+suite was executed, and no live mutation, restoration or enrollment cleanup result
+is claimed. Syntax/preservation and 113 offline checks passed using simulated
+dependencies/UI. These are not a full Gradle build or live Selenium PASS.
+The current v1.1.21 validation is summarized in the Cancellation section and `CHANGE_REPORT.md`.
 
 ## Enrollment tests
 
-Enrollment contains seven independent tests: ENROLL-001 verifies authenticated
+Enrollment contains eight independent tests: ENROLL-001 verifies authenticated
 enrollment, exact My Courses identity and targeted cancellation; ENROLL-002 verifies
 the guest redirect to `/login`; ENROLL-003 verifies return to the original Course
 Detail after login; ENROLL-004 verifies persistence after My Courses refresh;
 ENROLL-005 verifies persistence after real application logout and login again;
 ENROLL-006 verifies duplicate enrollment protection and one exact entry;
-ENROLL-007 verifies that two different Courses coexist in My Courses.
+ENROLL-007 verifies that two different Courses coexist in My Courses;
+ENROLL-008 verifies the same Course can be enrolled again after successful cancellation.
 BaseTest owns final browser/session cleanup for every test.
 See `CHANGE_REPORT.md` for the source comparison and actual validation results.
 
@@ -314,8 +414,8 @@ failure and suppressing cleanup errors. Cleanup failure after scenario success f
 the test. If authentication was lost after enrollment, TC4/TC5 call
 `LoginSupport.restoreSessionForCleanup(...)` through Page Objects before cancellation.
 This preserves their existing recovery behavior while keeping login outside
-EnrollmentSupport. Only their cleanup orchestration changes in this release;
-TC1–TC3 testcase implementations remain unchanged. Generic cleanup never logs in,
+EnrollmentSupport. Those existing TC4/TC5 methods and all other ENROLL-001–007
+implementations are unchanged in v1.1.21. Generic cleanup never logs in,
 logs out, clears browser storage or quits the driver.
 
 ### ENROLL-006 — Duplicate enrollment protection
@@ -354,6 +454,17 @@ A failure cleaning A does not skip B. Pre-existing and unrelated enrollments are
 never cancelled. Any cleanup error is suppressed on the original failure, or fails
 an otherwise successful scenario. No cleanup login or application logout is added
 to TC6/TC7; BaseTest owns final session teardown.
+
+### ENROLL-008 — Re-enrollment after successful cancellation
+
+`cancelledCourseShouldAllowReenrollment`, group `enroll-tc8`, retains one captured
+Course identity and ownership across both enrollment attempts. It asserts the exact
+existing enrollment-success popup and one My Courses entry for each successful
+enrollment, with confirmed cancellation and zero entries in between. Its final
+cleanup removes only this test-owned Course and verifies the original baseline.
+See the Cancellation section for independent run commands and shared cleanup details.
+**ENROLL-006 is unchanged:** its duplicate attempt happens while enrollment still exists;
+ENROLL-008 attempts enrollment after that enrollment has been removed.
 
 ## Course Detail TC1
 
@@ -495,11 +606,11 @@ belongs in Page Objects. A test arranges the scenario, invokes Page Objects/supp
 logs the high-level result, attaches Allure evidence and performs its final assertion.
 Do not inline helper machinery into test methods to bypass this rule.
 
-All new test classes must follow this rule, including `EnrollTests` and future
-`CancelCourseTests` and Profile tests. Test classes must not declare additional
+All test classes must follow this rule, including `EnrollTests`, `CancelTests`
+and future Profile tests. Test classes must not declare additional
 helper/utility methods of any visibility or nested records, classes or enums.
 Constants, logger fields, annotations and imports are allowed. Existing Login,
-Register and Course List test classes are outside this Enrollment release.
+Register and Course List test classes are unchanged in this release.
 
 - `BaseTest`: fresh Chrome for each method, EAGER loading, Homepage setup, failure
   screenshot before session cleanup and browser quit.
@@ -523,23 +634,31 @@ Register and Course List test classes are outside this Enrollment release.
   Course-name/instructor comparisons, href-keyed Detail caching, source/defect models
   and consistency summary generation. It receives the current WebDriver; Page
   Objects continue to own DOM discovery and capture.
-- `EnrollTests`: seven declared `@Test` methods; TC1 has two business assertions,
+- `EnrollTests`: eight declared `@Test` methods; TC1 has two business assertions,
   TC2 has one Login-redirect assertion, TC3 one return-URL assertion, and TC4/TC5
   one persistence assertion each. TC6 checks the duplicate popup and exact count; TC7
-  checks both selected Courses. Their enrollment/session prerequisites are setup guards.
+  checks both selected Courses. TC8 checks successful enrollment → cancellation →
+  successful re-enrollment of the same captured Course and exact occurrence counts.
   No helpers, nested types, raw locators or DOM parsing.
 - `LoginPage.waitUntilAtLoginPage`: explicit wait for the `/login` URL path only.
 - `CourseDetailPage.waitUntilAtCourseUrl`: explicit wait reusing `sameBrowserUrl`.
-- `AccountTests`: exactly thirteen independent direct `@Test` methods with scenario
+- `AccountTests`: exactly sixteen independent direct `@Test` methods with scenario
   orchestration, assertions, compact logs and non-secret evidence; no helpers or locators.
 - `AccountPage`: labeled personal-information snapshots, Account route/readiness,
   scoped Edit Profile controls, input DOM values and safe dismissal. Every existing
   My Courses selection/refresh, exact-title lookup and cancellation member is preserved.
+  The new read-only `captureMyCourseCounts` returns an immutable exact-title/count map
+  after the expected account response and active Courses panel are ready.
 - `HomePage`, `CourseCategoryPage`, `CourseDetailPage`: additive header/category
   navigation, Enrollment selection and popup operations; existing methods are preserved.
-- `EnrollmentSupport`: failure-safe targeted cancellation, evidence and error
-  preservation with testcase-specific labels; optional login recovery for the
-  persistence scenarios. BaseTest owns final browser/session cleanup.
+- `EnrollmentSupport`: existing failure-safe targeted cancellation, evidence and error
+  preservation; unchanged. Callers use `LoginSupport` for session recovery when needed.
+  BaseTest owns final browser/session cleanup.
+- `CancellationSupport`: per-test read-only baseline, selection excluding existing Courses,
+  ownership before each enrollment attempt, pre-cleanup evidence and authenticated
+  targeted cleanup through unchanged `EnrollmentSupport.finish`.
+- `CancelTests`: exactly three independent public `@Test` scenario methods; no helpers,
+  models, locators or low-level browser operations.
 - `EnrollInput`: the small Enrollment credential/expected-message holder.
 - `CourseCardDomReader`: reused card parsing; existing Course List calls retain their
   behavior.
@@ -547,16 +666,16 @@ Register and Course List test classes are outside this Enrollment release.
   comparison reused without changing its algorithm.
 - `RegisterPage`: additive success-dialog close wait and normal Register-to-Login
   navigation; all existing members remain unchanged. Existing LoginPage methods, registration
-  fixtures/randomizers and all five existing test classes are unchanged.
+  fixtures/randomizers remain unchanged. All 57 prior test methods are preserved.
 
-Course Detail was added locally in v1.1.5 and its support architecture in v1.1.9.
-Enrollment reached TC7 in v1.1.15; Account TC1–TC4 arrived in v1.1.16, TC5/TC6 in
-v1.1.17 and TC7–TC10 in v1.1.18. This release integrates the exact later TC8/TC10
-correction files and preserves them while adding only ACCOUNT-011–013.
-GitHub main remains v1.1.15 at `964b5d9095d0b1a6bf539918ef82119e2efd9dd9`.
-The version increments once from v1.1.18 to v1.1.19. Dependencies, Wrapper and suite
-registration are unchanged. LoginPage has only one additive, read-only Login-form
-observation method for TC13; its existing behavior and tests are unchanged.
+This release uses the complete local **v1.1.20** project, including ACCOUNT-014–016.
+GitHub main was checked on 2026-10-14 at
+`6dad733c11f98a2b0637d591e1a52cbb2f455b7e` and remains v1.1.19; its older Account
+files did not overwrite the newer local work. All 57 previous tests and every existing
+Java member remain intact. Exactly three Cancellation methods and ENROLL-008 are added.
+Version increments once: **1.1.20 → 1.1.21**. Dependencies, Wrapper, BaseTest,
+credentials and existing locators are unchanged. The TestNG XML preserves all six
+previous class registrations and adds `CancelTests` once. No GitHub push/merge.
 
 ## Allure and results
 

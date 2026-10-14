@@ -15,6 +15,7 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import vn.cybersoft.vlearning.base.BaseTest;
+import vn.cybersoft.vlearning.data.cancel.CancellationSupport;
 import vn.cybersoft.vlearning.data.enroll.EnrollInput;
 import vn.cybersoft.vlearning.data.enroll.EnrollmentSupport;
 import vn.cybersoft.vlearning.data.login.LoginSupport;
@@ -435,6 +436,44 @@ public class EnrollTests extends BaseTest {
             throw failure;
         } finally {
             EnrollmentSupport.finish(driver, "ENROLL-007", EnrollInput.ACCOUNT, ownedCourseNames, primaryFailure);
+        }
+    }
+
+    @Test(groups = {"enroll-tc8"}, testName = "ENROLL-008 - Re-enrollment after cancellation",
+            description = "ENROLL-008 - The same captured Course can be enrolled again after cancellation")
+    @Story("Learner re-enrolls after cancelling a Course")
+    @Description("Enroll an absent Course, verify one entry, cancel and verify zero, return through the same "
+            + "captured category/href, enroll again, verify exact success and one entry, then clean up the owned Course.")
+    public void cancelledCourseShouldAllowReenrollment() {
+        var support = new CancellationSupport(driver, "ENROLL-008");
+        Throwable primaryFailure = null;
+        try {
+            support.loginAndCaptureBaseline();
+            var course = support.selectAbsentCourse();
+            Assert.assertEquals(support.enroll(course), EnrollInput.SUCCESS_TITLE, "First enrollment must succeed.");
+            var page = support.openMyCourses();
+            Assert.assertTrue(page.waitUntilCoursePresent(course.courseName()), "First enrollment must appear.");
+            Assert.assertEquals(page.countExactCourseItems(course.courseName()), 1, "Exactly one first enrollment.");
+            Assert.assertEquals(support.captureCourses(page, "After first enrollment"), support.expectedCourses(course),
+                    "Original Courses and one owned enrollment.");
+            Assert.assertTrue(page.isExactCourseCancellationAvailable(course.courseName()), "Exact cancellation control must be available.");
+            Assert.assertTrue(page.cancelCourseIfPresent(course.courseName()), "Cancellation must remove the owned Course.");
+            Assert.assertEquals(page.countExactCourseItems(course.courseName()), 0, "Course must be absent before re-enrollment.");
+            Assert.assertEquals(support.captureCourses(page, "After cancellation"), support.originalCourses(), "Original Courses remain intact.");
+
+            // enroll reuses this exact immutable category/href/title and rechecks absence; ownership is retained.
+            Assert.assertEquals(support.enroll(course), EnrollInput.SUCCESS_TITLE, "Re-enrollment after cancellation must succeed.");
+            page = support.openMyCourses();
+            Assert.assertTrue(page.waitUntilCoursePresent(course.courseName()), "Re-enrolled Course must appear.");
+            Assert.assertEquals(page.countExactCourseItems(course.courseName()), 1, "Exactly one re-enrolled Course.");
+            Assert.assertEquals(support.captureCourses(page, "After re-enrollment"), support.expectedCourses(course),
+                    "The same Course appears exactly once alongside unchanged original Courses.");
+            LOGGER.info("ENROLL-008 | Re-enrollment after cancellation verified | course={} | href={}", course.courseName(), course.href());
+        } catch (RuntimeException | AssertionError failure) {
+            primaryFailure = failure;
+            throw failure;
+        } finally {
+            support.finish(primaryFailure);
         }
     }
 }

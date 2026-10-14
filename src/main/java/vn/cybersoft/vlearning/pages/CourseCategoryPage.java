@@ -3,6 +3,8 @@ package vn.cybersoft.vlearning.pages;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import org.openqa.selenium.By;
 import org.openqa.selenium.StaleElementReferenceException;
@@ -127,6 +129,30 @@ public class CourseCategoryPage extends BasePage {
                 if (!name.isBlank()) return new EnrollmentCourse(categoryUrl, href, name);
             }
             return null;
+        });
+    }
+
+    /** Additive selector for non-empty accounts; reuse the confirmed card/stikerCard identity contract. */
+    public Optional<EnrollmentCourse> selectCourseForEnrollmentExcluding(
+            Set<String> unavailableNames, List<EnrollmentCourse> selectedCourses) {
+        waitUntilLoaded();
+        String categoryUrl = driver.getCurrentUrl();
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            List<WebElement> cards = currentDriver.findElements(COURSE_CARDS);
+            if (cards.isEmpty()) return null;
+            for (WebElement card : cards) {
+                if (!card.isDisplayed() || !card.isEnabled()) continue;
+                String href = card.getAttribute("href");
+                if (!isCourseDetailHref(href, categoryUrl)) continue;
+                List<WebElement> names = card.findElements(ENROLLMENT_COURSE_NAME);
+                if (names.size() != 1 || !names.get(0).isDisplayed()) continue;
+                String name = normalize(names.get(0).getText());
+                if (name.isBlank() || unavailableNames.stream().anyMatch(value -> normalize(value).equals(name))) continue;
+                if (selectedCourses.stream().anyMatch(selected -> normalize(selected.courseName()).equals(name)
+                        || CourseDetailPage.sameBrowserUrl(selected.href(), href))) continue;
+                return Optional.of(new EnrollmentCourse(categoryUrl, href, name));
+            }
+            return Optional.empty();
         });
     }
 

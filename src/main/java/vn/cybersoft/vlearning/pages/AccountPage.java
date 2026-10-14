@@ -4,6 +4,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import org.openqa.selenium.By;
@@ -735,5 +737,278 @@ public class AccountPage extends BasePage {
                 .isBlank();
     }
 
+
+    /** Read-only multiset of exact titles, gated by the account response and active Courses panel. */
+    public Map<String, Integer> captureMyCourseCounts(String expectedAccount) {
+        waitUntilVisible(ROOT);
+        waitUntilVisible(MY_COURSES_PANEL);
+        return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+            // The same response-readiness guard used by openMyCourses; never accept just an empty shell.
+            if (!hasLoadedCourseOwner(expectedAccount) || !isDisplayedNow(MY_COURSES_PANEL)) return null;
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            for (WebElement item : currentDriver.findElements(MY_COURSE_ITEMS)) {
+                if (!item.isDisplayed()) return null;
+                List<WebElement> titles = item.findElements(COURSE_TITLE).stream()
+                        .filter(WebElement::isDisplayed).toList();
+                if (titles.size() > 1) {
+                    throw new IllegalStateException("Ambiguous My Courses item: multiple visible titles.");
+                }
+                if (titles.isEmpty()) return null;
+                String name = normalize(titles.get(0).getText());
+                if (name.isBlank()) return null;
+                counts.merge(name, 1, Integer::sum);
+            }
+            return hasLoadedCourseOwner(expectedAccount) && isDisplayedNow(MY_COURSES_PANEL)
+                    ? Map.copyOf(counts) : null;
+        });
+    }
+
+    private boolean hasLoadedCourseOwner(String expectedAccount) {
+        List<String> accounts = new ArrayList<>();
+        for (WebElement info : driver.findElements(PERSONAL_INFO)) {
+            for (WebElement field : info.findElements(ACCOUNT_FIELDS)) {
+                String text = normalize(field.getDomProperty("textContent"));
+                if (text.startsWith("Tài khoản:")) accounts.add(text.substring("Tài khoản:".length()).strip());
+            }
+        }
+        if (accounts.size() > 1) throw new IllegalStateException("Ambiguous loaded Account identity.");
+        return accounts.size() == 1 && expectedAccount.equals(accounts.get(0));
+    }
+
+    public PersonalInformation refreshPersonalInformation(String expectedAccount) {
+        driver.navigate().refresh();
+        return readPersonalInformation(expectedAccount);
+    }
+
+    public enum StaleProfileAction {
+        FULL_NAME, PASSWORD, EMAIL, PHONE, UPDATE, COMPLETE, CLOSE;
+
+        public boolean isField() {
+            return this == FULL_NAME || this == PASSWORD || this == EMAIL || this == PHONE;
+        }
+    }
+
+    public record PreparedStaleProfile(ProfileValues intended, EditProfileValues inputs,
+                                       boolean ready) {}
+
+    /** Prepare all OTHER fields before logout; the selected field is left untouched. */
+    public PreparedStaleProfile prepareProfileBeforeLogout(StaleProfileAction action,
+            ProfileValues original, ProfileValues replacement, String password) {
+        ProfileValues intended = switch (action) {
+            case FULL_NAME, PASSWORD, COMPLETE, CLOSE ->
+                    new ProfileValues(replacement.fullName(), original.email(), original.phone());
+            case EMAIL -> new ProfileValues(original.fullName(), replacement.email(), original.phone());
+            case PHONE -> new ProfileValues(original.fullName(), original.email(), replacement.phone());
+            case UPDATE -> original;
+        };
+        if (action == StaleProfileAction.UPDATE) {
+            return new PreparedStaleProfile(intended, null,
+                    !isEditProfileDisplayedNow() && isUpdateProfileInteractableNow());
+        }
+        openEditProfile();
+        EditProfileSnapshot baseline = captureEditProfileSnapshot(password);
+        if (action != StaleProfileAction.FULL_NAME) enterEditFullName(intended.fullName());
+        if (action != StaleProfileAction.PASSWORD) enterEditPassword(password);
+        if (action != StaleProfileAction.EMAIL) enterEditEmail(intended.email());
+        if (action != StaleProfileAction.PHONE) enterEditPhone(intended.phone());
+        EditProfileValues inputs = readEditProfileValues(password);
+        EditWarnings warnings = readEditWarnings();
+        boolean ready = inputs.fullName().equals(action == StaleProfileAction.FULL_NAME
+                    ? baseline.values().fullName() : intended.fullName())
+                && inputs.email().equals(action == StaleProfileAction.EMAIL
+                    ? baseline.values().email() : intended.email())
+                && inputs.phone().equals(action == StaleProfileAction.PHONE
+                    ? baseline.values().phone() : intended.phone())
+                && (action == StaleProfileAction.PASSWORD
+                    ? isPasswordUnchangedSince(baseline) : inputs.passwordMatches())
+                && inputs.passwordMasked()
+                && (action == StaleProfileAction.FULL_NAME || warnings.fullName().isBlank())
+                && (action == StaleProfileAction.PASSWORD || warnings.password().isBlank())
+                && (action == StaleProfileAction.EMAIL || warnings.email().isBlank())
+                && (action == StaleProfileAction.PHONE || warnings.phone().isBlank());
+        return new PreparedStaleProfile(intended, inputs, ready);
+    }
+
+    /** Read-only, immediate check. Never wait for fields on a blank stale tab. */
+    public boolean isCompleteStaleDraftReady(ProfileValues expected, String password) {
+        if (isGuestAccountPageBlank() || !isDisplayedNow(EDIT_MODAL)) return false;
+        WebElement name = availableNow(EDIT_FULL_NAME);
+        WebElement secret = availableNow(EDIT_PASSWORD);
+        WebElement email = availableNow(EDIT_EMAIL);
+        WebElement phone = availableNow(EDIT_PHONE);
+        return name != null && secret != null && email != null && phone != null
+                && expected.fullName().equals(name.getDomProperty("value"))
+                && expected.email().equals(email.getDomProperty("value"))
+                && expected.phone().equals(phone.getDomProperty("value"))
+                && "password".equals(secret.getDomProperty("type"))
+                && password.equals(secret.getDomProperty("value"))
+                && !readEditWarnings().hasAny();
+    }
+
+    public record StaleUiState(String url, boolean blank, boolean loginDisplayed,
+                               boolean modalDisplayed, boolean targetAvailable,
+                               boolean formUsable, int exactCourseCount,
+                               EditWarnings warnings, List<String> popupTitles) {}
+
+    public record StaleActionObservation(String action, StaleUiState before, StaleUiState after,
+                                         boolean attempted, boolean completed, String problem) {}
+
+    /** One selected interaction only. No navigation, login, retry or successful-response wait. */
+    public StaleActionObservation actOnStaleProfileOnce(StaleProfileAction action,
+                                                        ProfileValues intended, String password) {
+        By target = staleProfileTarget(action);
+        StaleUiState before = readStaleUi(target, null);
+        if (before.blank() || !before.targetAvailable()) {
+            return new StaleActionObservation(action.name(), before, before, false, false,
+                    before.blank() ? "Blank before action; interaction not reached."
+                            : "Selected control unavailable before action; not clicked/typed.");
+        }
+        boolean completed = false;
+        String problem = "";
+        try {
+            WebElement element = availableNow(target);
+            if (element == null) {
+                return new StaleActionObservation(action.name(), before, readStaleUi(target, null),
+                        false, false, "Selected control disappeared before action.");
+            }
+            if (action.isField()) {
+                if (action == StaleProfileAction.PASSWORD
+                        && !"password".equals(element.getDomProperty("type"))) {
+                    throw new IllegalStateException("Refusing to enter a password into an unmasked field.");
+                }
+                element.clear();
+                // clear() itself can trigger the stale React screen to disappear.
+                StaleUiState afterClear = readStaleUi(target, null);
+                if (!afterClear.blank() && afterClear.targetAvailable()) {
+                    WebElement input = availableNow(target);
+                    if (input != null) {
+                        String value = switch (action) {
+                            case FULL_NAME -> intended.fullName();
+                            case PASSWORD -> password;
+                            case EMAIL -> intended.email();
+                            case PHONE -> intended.phone();
+                            default -> throw new IllegalStateException("Expected a field action.");
+                        };
+                        input.sendKeys(value);
+                        completed = true;
+                    }
+                } else {
+                    problem = "Field clear triggered blank/removed control; no further input sent.";
+                }
+            } else {
+                element.click();
+                completed = true;
+            }
+        } catch (org.openqa.selenium.WebDriverException interactionFailure) {
+            // Never include sendKeys command arguments or password-bearing exception messages.
+            problem = interactionFailure.getClass().getSimpleName();
+        }
+        return new StaleActionObservation(action.name(), before, observeStaleUi(target, null),
+                true, completed, problem);
+    }
+
+    /** Reuses the exact-title and ambiguity guards, but never waits for successful cancellation. */
+    public StaleActionObservation cancelExactCourseOnceAndObserve(String courseName) {
+        requireName(courseName);
+        StaleUiState before = readStaleUi(null, courseName);
+        if (before.blank() || !before.targetAvailable()) {
+            return new StaleActionObservation("Hủy khóa học: " + courseName, before, before, false, false,
+                    before.blank() ? "Blank before action; cancellation not reached."
+                            : "Exact Course cancellation control unavailable; not clicked.");
+        }
+        boolean completed = false;
+        String problem = "";
+        try {
+            WebElement button = exactCancellationNow(courseName);
+            if (button == null) {
+                return new StaleActionObservation("Hủy khóa học: " + courseName, before,
+                        readStaleUi(null, courseName), false, false, "Exact control disappeared before click.");
+            }
+            button.click();
+            completed = true;
+        } catch (org.openqa.selenium.WebDriverException interactionFailure) {
+            problem = interactionFailure.getClass().getSimpleName();
+        }
+        return new StaleActionObservation("Hủy khóa học: " + courseName, before,
+                observeStaleUi(null, courseName), true, completed, problem);
+    }
+
+    public boolean isExactCourseCancellationAvailable(String courseName) {
+        requireName(courseName);
+        return exactCancellationNow(courseName) != null;
+    }
+
+    private By staleProfileTarget(StaleProfileAction action) {
+        return switch (action) {
+            case FULL_NAME -> EDIT_FULL_NAME;
+            case PASSWORD -> EDIT_PASSWORD;
+            case EMAIL -> EDIT_EMAIL;
+            case PHONE -> EDIT_PHONE;
+            case UPDATE -> UPDATE_PROFILE;
+            case COMPLETE -> EDIT_COMPLETE;
+            case CLOSE -> EDIT_CLOSE;
+        };
+    }
+
+    private WebElement availableNow(By locator) {
+        List<WebElement> matches = driver.findElements(locator);
+        if (matches.size() > 1) throw new IllegalStateException("Ambiguous Account control: " + locator);
+        if (matches.isEmpty()) return null;
+        WebElement element = matches.get(0);
+        return element.isDisplayed() && element.isEnabled() ? element : null;
+    }
+
+    private WebElement exactCancellationNow(String courseName) {
+        List<WebElement> matches = findExactCourseItems(courseName);
+        requireUnambiguous(courseName, matches);
+        if (matches.isEmpty() || !matches.get(0).isDisplayed()) return null;
+        List<WebElement> buttons = matches.get(0).findElements(CANCEL_COURSE).stream()
+                .filter(button -> button.isDisplayed() && button.isEnabled()).toList();
+        if (buttons.size() > 1) throw new IllegalStateException("Ambiguous cancellation control for: " + courseName);
+        return buttons.isEmpty() ? null : buttons.get(0);
+    }
+
+    private StaleUiState readStaleUi(By target, String courseName) {
+        String url = driver.getCurrentUrl();
+        EditWarnings emptyWarnings = new EditWarnings("", "", "", "");
+        if (isGuestAccountPageBlank()) {
+            return new StaleUiState(url, true, false, false, false, false, -1, emptyWarnings, List.of());
+        }
+        boolean modal = isDisplayedNow(EDIT_MODAL);
+        List<String> titles = new ArrayList<>();
+        captureVisibleUpdateTitles(titles);
+        int count = courseName != null && isDisplayedNow(MY_COURSES_PANEL)
+                ? findExactCourseItems(courseName).size() : -1;
+        boolean targetAvailable = courseName == null
+                ? availableNow(target) != null : exactCancellationNow(courseName) != null;
+        boolean formUsable = modal && availableNow(EDIT_FULL_NAME) != null
+                && availableNow(EDIT_PASSWORD) != null && availableNow(EDIT_EMAIL) != null
+                && availableNow(EDIT_PHONE) != null && availableNow(EDIT_COMPLETE) != null;
+        return new StaleUiState(url, false, new LoginPage(driver).isLoginFormDisplayedNow(), modal,
+                targetAvailable, formUsable, count, modal ? readEditWarnings() : emptyWarnings,
+                List.copyOf(titles));
+    }
+
+    /** At most two seconds of UI observation; return immediately on blank rendering. */
+    private StaleUiState observeStaleUi(By target, String courseName) {
+        StaleUiState[] latest = {null};
+        List<String> seenTitles = new ArrayList<>();
+        try {
+            getWait().withTimeout(Duration.ofSeconds(2)).pollingEvery(Duration.ofMillis(100))
+                    .ignoring(StaleElementReferenceException.class).until(currentDriver -> {
+                        StaleUiState state = readStaleUi(target, courseName);
+                        for (String title : state.popupTitles()) {
+                            if (!seenTitles.contains(title)) seenTitles.add(title);
+                        }
+                        latest[0] = new StaleUiState(state.url(), state.blank(), state.loginDisplayed(),
+                                state.modalDisplayed(), state.targetAvailable(), state.formUsable(),
+                                state.exactCourseCount(), state.warnings(), List.copyOf(seenTitles));
+                        return state.blank();
+                    });
+        } catch (TimeoutException observationComplete) {
+            if (latest[0] == null) throw observationComplete;
+        }
+        return latest[0];
+    }
 
 }
