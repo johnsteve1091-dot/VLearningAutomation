@@ -22,6 +22,7 @@ import vn.cybersoft.vlearning.data.register.RegisterInput;
 import vn.cybersoft.vlearning.data.register.RegisterMessage;
 import vn.cybersoft.vlearning.data.register.RegisterSupport;
 import vn.cybersoft.vlearning.pages.AccountPage;
+import vn.cybersoft.vlearning.pages.AccountPage.StaleProfileAction;
 import vn.cybersoft.vlearning.pages.HomePage;
 import vn.cybersoft.vlearning.pages.LoginPage;
 import vn.cybersoft.vlearning.pages.RegisterPage;
@@ -922,5 +923,190 @@ public class AccountTests extends BaseTest {
         LOGGER.info("ACCOUNT-013 | Blank page verified");
     }
 
+
+    @Test(groups = {"account-tc14"}, testName = "ACCOUNT-014 - Switch account sessions",
+            description = "ACCOUNT-014 - Login A, logout, Login B and retain B's identity/profile after refresh")
+    @Story("Account session isolation")
+    @Description("Use the two existing accounts. Assert labeled account identity, capture each profile, "
+            + "use application logout, and compare B's captured profile after refresh. Never edit either account.")
+    public void accountSwitchShouldDisplayCorrectUser() {
+        AccountPage page = AccountSupport.loginAndOpenAccount(driver, EnrollInput.ACCOUNT, EnrollInput.PASSWORD);
+        HomePage home = new HomePage(driver);
+        Assert.assertTrue(home.isAuthenticated(), "User A Login must succeed.");
+        var userA = page.readPersonalInformation(EnrollInput.ACCOUNT);
+        AccountSupport.recordAccountObservation("ACCOUNT-014", "User A identity and profile", userA, EnrollInput.PASSWORD);
+        Assert.assertEquals(userA.account(), EnrollInput.ACCOUNT, "Account A must display A's labeled username.");
+
+        boolean loggedOut = home.logoutIfAuthenticated();
+        boolean guest = !home.isAuthenticated();
+        AccountSupport.recordAccountObservation("ACCOUNT-014", "Application logout",
+                "Logout clicked=" + loggedOut + "; guest confirmed=" + guest, null);
+        Assert.assertTrue(loggedOut && guest, "User A's application session must end before Login B.");
+
+        page = AccountSupport.loginAndOpenAccount(driver, AccountInput.UPDATE_ACCOUNT, AccountInput.UPDATE_PASSWORD);
+        Assert.assertTrue(home.isAuthenticated(), "User B Login must succeed.");
+        var userB = page.readPersonalInformation(AccountInput.UPDATE_ACCOUNT);
+        AccountSupport.recordAccountObservation("ACCOUNT-014", "User B identity and profile", userB, AccountInput.UPDATE_PASSWORD);
+        Assert.assertEquals(userB.account(), AccountInput.UPDATE_ACCOUNT, "Account B must display B's labeled username.");
+        Assert.assertNotEquals(userB.account(), userA.account(), "Account B must not display A as the current account.");
+
+        var refreshed = page.refreshPersonalInformation(AccountInput.UPDATE_ACCOUNT);
+        AccountSupport.recordAccountObservation("ACCOUNT-014", "User B after refresh", refreshed, AccountInput.UPDATE_PASSWORD);
+        Assert.assertEquals(refreshed.account(), AccountInput.UPDATE_ACCOUNT, "Refresh must retain User B's identity.");
+        Assert.assertEquals(refreshed, userB, "All six displayed User B profile values must remain consistent.");
+    }
+
+    @Test(groups = {"account-tc15"}, testName = "ACCOUNT-015 - Stale tab cannot persist profile changes",
+            description = "ACCOUNT-015 - Independently exercise four inputs and three controls after logout in Tab B")
+    @Story("Profile integrity after multi-tab logout")
+    @Description("Seven independent two-tab arrangements in one browser. Observe blank UI before/after each "
+            + "selected action, submit only complete valid drafts, freshly log in and compare three stored values. "
+            + "Restore detected mutations without removing the security failure.")
+    public void loggedOutTabShouldNotUpdateProfile() {
+        AccountPage initial = AccountSupport.loginAndOpenAccount(driver,
+                AccountInput.UPDATE_ACCOUNT, AccountInput.UPDATE_PASSWORD);
+        var original = initial.readProfileValues(AccountInput.UPDATE_ACCOUNT);
+        var replacement = AccountInput.differentValidProfile(original);
+        AccountSupport.recordProfile("ACCOUNT-015", "Original three values", original);
+        SoftAssert softly = new SoftAssert();
+
+        for (StaleProfileAction action : StaleProfileAction.values()) {
+            String stage = "Attempt " + (action.ordinal() + 1) + " - " + action;
+            try (var tabs = new AccountSupport.AccountTabs(driver)) {
+                try {
+                    AccountPage page = tabs.loginFresh(AccountInput.UPDATE_ACCOUNT, AccountInput.UPDATE_PASSWORD);
+                    var starting = page.refreshProfileValues(AccountInput.UPDATE_ACCOUNT, false);
+                    AccountSupport.recordProfile("ACCOUNT-015", stage + " / authenticated starting profile", starting);
+                    Assert.assertEquals(starting, original, stage + ": original profile required before an independent attempt.");
+
+                    var prepared = page.prepareProfileBeforeLogout(action, original, replacement, AccountInput.UPDATE_PASSWORD);
+                    AccountSupport.recordAccountObservation("ACCOUNT-015", stage + " / preparation", prepared, AccountInput.UPDATE_PASSWORD);
+                    Assert.assertTrue(prepared.ready(), stage + ": other fields must be valid before logout; selected field untouched.");
+                    if (action == StaleProfileAction.COMPLETE || action == StaleProfileAction.CLOSE) {
+                        Assert.assertTrue(page.isCompleteStaleDraftReady(prepared.intended(), AccountInput.UPDATE_PASSWORD),
+                                stage + ": complete valid draft and existing masked password required before logout.");
+                    }
+
+                    var logout = tabs.logoutInSecondTab(AccountInput.UPDATE_ACCOUNT);
+                    AccountSupport.recordAccountObservation("ACCOUNT-015", stage + " / Tab B logout", logout, null);
+                    Assert.assertTrue(logout.sharedAuthentication(), stage + ": Tab B must share authentication.");
+                    Assert.assertEquals(logout.sharedAccount(), AccountInput.UPDATE_ACCOUNT, stage + ": shared identity.");
+                    Assert.assertTrue(logout.logoutClicked() && logout.guestConfirmed(), stage + ": actual logout must complete.");
+
+                    tabs.returnToOriginalTab();
+                    var observed = page.actOnStaleProfileOnce(action, prepared.intended(), AccountInput.UPDATE_PASSWORD);
+                    AccountSupport.recordAccountObservation("ACCOUNT-015", stage + " / selected action", observed, AccountInput.UPDATE_PASSWORD);
+                    softly.assertTrue(observed.completed() || observed.before().blank() || observed.after().blank()
+                                    || observed.after().loginDisplayed() || !observed.before().targetAvailable()
+                                    || !observed.after().targetAvailable(),
+                            stage + ": an available action must execute or show observable blocking; " + observed.problem());
+
+                    // Only the four input stages may follow up with a valid submission.
+                    // Blank observations end stale-page interaction immediately.
+                    if (action.isField() && !observed.after().blank() && observed.after().formUsable()) {
+                        boolean valid = page.isCompleteStaleDraftReady(prepared.intended(), AccountInput.UPDATE_PASSWORD);
+                        AccountSupport.recordAccountObservation("ACCOUNT-015", stage + " / fully valid draft before submission",
+                                valid, null);
+                        softly.assertTrue(valid, stage + ": incomplete/invalid form is not evidence of logout protection.");
+                        if (valid) {
+                            var submission = page.actOnStaleProfileOnce(StaleProfileAction.COMPLETE,
+                                    prepared.intended(), AccountInput.UPDATE_PASSWORD);
+                            AccountSupport.recordAccountObservation("ACCOUNT-015", stage + " / valid-form submission",
+                                    submission, AccountInput.UPDATE_PASSWORD);
+                            softly.assertTrue(submission.completed() || submission.before().blank() || submission.after().blank()
+                                            || submission.after().loginDisplayed() || !submission.before().targetAvailable()
+                                            || !submission.after().targetAvailable(),
+                                    stage + ": valid-form submit could not execute or demonstrate blocking; " + submission.problem());
+                        }
+                    }
+                } catch (RuntimeException | AssertionError failure) {
+                    var preserved = AccountSupport.staleAttemptFailure(stage, failure, AccountInput.UPDATE_PASSWORD);
+                    AccountSupport.recordAccountObservation("ACCOUNT-015", stage + " / interrupted", preserved, AccountInput.UPDATE_PASSWORD);
+                    softly.fail(stage + ": setup/action failed; remaining stages still run.", preserved);
+                } finally {
+                    // This runs even after blank rendering, input/click errors or failed prerequisites.
+                    try {
+                        var stored = AccountSupport.verifyAndRestoreStaleProfile(tabs, stage,
+                                AccountInput.UPDATE_ACCOUNT, AccountInput.UPDATE_PASSWORD, original);
+                        softly.assertEquals(stored.fullName(), original.fullName(), stage + ": unauthorized stored Full Name change.");
+                        softly.assertEquals(stored.email(), original.email(), stage + ": unauthorized stored Email change.");
+                        softly.assertEquals(stored.phone(), original.phone(), stage + ": unauthorized stored Phone change (leading zeros preserved).");
+                    } catch (RuntimeException | AssertionError failure) {
+                        softly.fail(stage + ": persisted verification/restoration failed.",
+                                AccountSupport.staleAttemptFailure(stage, failure, AccountInput.UPDATE_PASSWORD));
+                    }
+                }
+            } catch (RuntimeException | AssertionError windowFailure) {
+                softly.fail(stage + ": window setup/cleanup failed.",
+                        AccountSupport.staleAttemptFailure(stage, windowFailure, AccountInput.UPDATE_PASSWORD));
+            }
+        }
+        softly.assertAll();
+    }
+
+    @Test(groups = {"account-tc16"}, testName = "ACCOUNT-016 - Stale tab cannot cancel a Course",
+            description = "ACCOUNT-016 - A test-owned Course remains after Tab B logout and Tab A cancellation")
+    @Story("Enrollment integrity after multi-tab logout")
+    @Description("Select an absent exact Course, enroll it, logout in a second tab, click its cancellation once, "
+            + "freshly authenticate and assert one enrollment remains. Finally cancel only this test's Course "
+            + "under its original account and verify zero after refresh, preserving any security failure.")
+    public void loggedOutTabShouldNotCancelEnrolledCourse() {
+        try (var tabs = new AccountSupport.AccountTabs(driver)) {
+            String courseName = null;
+            boolean enrollmentAttempted = false;
+            Throwable primaryFailure = null;
+            try {
+                tabs.loginFresh(EnrollInput.ACCOUNT, EnrollInput.PASSWORD);
+                var selected = AccountSupport.selectAbsentCourseForAccountTest(driver, EnrollInput.ACCOUNT);
+                courseName = selected.courseName();
+                HomePage home = new HomePage(driver);
+                // Recheck absence immediately before returning to the exact captured Course Detail.
+                home.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT).requireCourseNotEnrolled(courseName);
+                var detail = home.goToCourseCategory(selected.categoryUrl()).openCourseForEnrollment(selected);
+                enrollmentAttempted = true;
+                detail.clickEnroll();
+                String title = detail.waitForEnrollmentPopupTitle();
+                AccountSupport.recordAccountObservation("ACCOUNT-016", "Enrollment popup", title, null);
+                Assert.assertEquals(title, EnrollInput.SUCCESS_TITLE, "Owned Course must enroll successfully.");
+                detail.waitUntilEnrollmentPopupClosed();
+
+                AccountPage page = home.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT);
+                Assert.assertTrue(page.waitUntilCoursePresent(courseName), "Exact owned Course must be displayed.");
+                int before = page.countExactCourseItems(courseName);
+                AccountSupport.recordAccountObservation("ACCOUNT-016", "My Courses before logout",
+                        "Course=" + courseName + "; exact count=" + before, null);
+                Assert.assertEquals(before, 1, "Exactly one test-owned enrollment required.");
+                Assert.assertTrue(page.isExactCourseCancellationAvailable(courseName), "Exact Course cancellation must be available before logout.");
+
+                var logout = tabs.logoutInSecondTab(EnrollInput.ACCOUNT);
+                AccountSupport.recordAccountObservation("ACCOUNT-016", "Tab B logout", logout, null);
+                Assert.assertTrue(logout.sharedAuthentication(), "Tab B must share authentication.");
+                Assert.assertEquals(logout.sharedAccount(), EnrollInput.ACCOUNT, "Tab B must identify the Course owner.");
+                Assert.assertTrue(logout.logoutClicked() && logout.guestConfirmed(), "Application logout must complete.");
+                tabs.returnToOriginalTab();
+                var observation = page.cancelExactCourseOnceAndObserve(courseName);
+                AccountSupport.recordAccountObservation("ACCOUNT-016", "Stale Tab A cancellation", observation, null);
+
+                // The fresh-login count is the security result, regardless of blank/popup UI.
+                page = tabs.loginFresh(EnrollInput.ACCOUNT, EnrollInput.PASSWORD).openMyCourses(EnrollInput.ACCOUNT)
+                        .refreshMyCourses(EnrollInput.ACCOUNT);
+                int after = page.countExactCourseItems(courseName);
+                AccountSupport.recordAccountObservation("ACCOUNT-016", "My Courses after fresh Login + refresh",
+                        "Course=" + courseName + "; exact count=" + after, null);
+                Assert.assertEquals(after, 1, "Unauthorized cancellation removed/changed the test-owned enrollment: " + courseName);
+                Assert.assertTrue(observation.completed() || observation.before().blank() || observation.after().blank()
+                                || observation.after().loginDisplayed() || !observation.before().targetAvailable()
+                                || !observation.after().targetAvailable(),
+                        "Available exact cancellation must execute or show observable blocking: " + observation.problem());
+            } catch (RuntimeException | AssertionError failure) {
+                AssertionError preserved = AccountSupport.staleAttemptFailure("ACCOUNT-016", failure, EnrollInput.PASSWORD);
+                primaryFailure = preserved;
+                throw preserved;
+            } finally {
+                AccountSupport.finishStaleCourseCheck(tabs, EnrollInput.ACCOUNT, EnrollInput.PASSWORD,
+                        courseName, enrollmentAttempted, primaryFailure);
+            }
+        }
+    }
 
 }
