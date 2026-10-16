@@ -1,6 +1,6 @@
-# VLearningAutomation — v1.1.21
+# VLearningAutomation — v1.1.25
 
-Cybersoft V Learning Selenium capstone. The active source contains **61 TestNG
+Cybersoft V Learning Selenium capstone. The active source contains **65 TestNG
 methods**:
 
 | Test class | Methods | Current scope |
@@ -12,6 +12,7 @@ methods**:
 | EnrollTests | 8 | ENROLL-001 authenticated enrollment; ENROLL-002 guest redirect; ENROLL-003 return to original Detail; ENROLL-004 refresh persistence; ENROLL-005 logout/login persistence; ENROLL-006 duplicate protection; ENROLL-007 two distinct courses; ENROLL-008 re-enrollment after cancellation |
 | AccountTests | 16 | ACCOUNT-001 navigation; ACCOUNT-002 registered profile; ACCOUNT-003 modal controls; ACCOUNT-004 input retention; ACCOUNT-005 unchanged profile submission; ACCOUNT-006 changed profile persistence and restoration; ACCOUNT-007/009 rejection; ACCOUNT-008/010 isolated field validation; ACCOUNT-011/012 unsaved edits; ACCOUNT-013 guest blank page; ACCOUNT-014 account switching; ACCOUNT-015 stale profile actions; ACCOUNT-016 stale cancellation and owned cleanup |
 | CancelTests | 3 | CANCEL-001 exact cancellation; CANCEL-002 preserve B and original Courses; CANCEL-003 cancellation persists after refresh |
+| E2ETests | 4 | E2E-001 new student lifecycle; E2E-002 cross-account enrollment isolation; E2E-003 guest Login return and completed enrollment; E2E-004 stale A cancellation after B Login in a shared tab session |
 
 The Course List TC1, TC2 and TC3 families each cover Homepage, Khóa học and
 Danh mục separately. TC4 covers the Khóa học main cards. Existing source controls
@@ -26,8 +27,8 @@ report runtime **3.14.3**, Java/TestNG adapter **2.35.5**. AspectJ is disabled.
 1. Extract the ZIP and open its `VLearningAutomation` folder in IntelliJ.
 2. Select JDK 26 for the Project SDK and Gradle JVM, then sync Gradle.
 3. Install Google Chrome. The existing setup uses Selenium Manager for ChromeDriver.
-4. Run each new Cancellation/Enrollment method independently using the commands below,
-   then CancelTests, EnrollTests and the full suite. Existing departments remain registered.
+4. Run E2E-004 independently using the commands below, then all four E2E methods, regression and the full suite.
+   All eight existing test classes remain registered once. Run account-mutating tests sequentially.
 
 PowerShell, from the project root:
 
@@ -64,11 +65,285 @@ Run Course Detail TC2 independently with:
 .\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseDetailTests.knownCourseShouldExposePopulatedCurriculum"
 ```
 
-To run all 61 methods, use `src/test/resources/testng.xml` in IntelliJ or
+To run all 65 methods, use `src/test/resources/testng.xml` in IntelliJ or
 `gradlew.bat clean test`. For another class, change the fully qualified class
 name in `--tests`. Existing Login/Register tests include real authentication and
 registration; their existing behavior and fixtures are preserved. ENROLL-001, TC4,
 TC5, TC6, TC7, TC8 and CANCEL-001–003 mutate account state and must complete targeted cleanup before another run.
+
+## E2E-004 — Cross-Account Session Hijack Protection
+
+`E2ETests.staleAccountTabShouldNotMutateCoursesAfterAccountSwitch`, group `e2e-tc4`,
+uses the existing Enrollment account A and profile-update account B in **one
+WebDriver with two tabs sharing its Chrome profile**. It creates no new account.
+
+Read-only setup logs in as B, verifies its loaded identity, refreshes My Courses
+and captures B's complete original Course counts. Application logout and normal
+Login switch to A, whose independent original map is captured after refresh.
+Existing frontend discovery finds a Course X absent from both accounts and captures
+its category/href/exact stikerCard name. Existing enrollments are never cancelled
+to obtain an eligible candidate; no safe candidate gives an explicit setup failure.
+
+Under freshly verified A, recheck absence, open the captured category/card and
+verify the Detail URL. Record **A + X ownership immediately before** the single
+enrollment click. Require the exact existing success title, one X in A's My Courses,
+and A's entire original map plus X. Keep this original My Courses tab open.
+
+Existing `AccountSupport.AccountTabs.logoutInSecondTab(A)` opens Tab B, verifies
+the initially shared A session, uses the application Logout control and confirms
+guest state. The scenario then explicitly logs B in normally, verifies authenticated
+navigation and B's loaded Account identity, and only then returns to Tab A.
+This is distinct from ACCOUNT-016's logout-only state.
+
+Tab A is never refreshed, navigated or logged in during the stale action. The new
+`AccountPage.cancelStaleCourseForAccountOnceAndObserve(...)` reads the existing
+Account response and stale UI. Only a page still identifying A with one exact X
+and its cancellation control can delegate to the existing
+`cancelExactCourseOnceAndObserve(...)`. Blank, Login, changed/unknown owner or
+unavailable-target states are recorded without a fabricated click. A clearly
+changed B page is never clicked. There is no retry, force-click or wait for normal
+successful removal. The observation records identity, before/after state, whether
+an interaction was attempted/completed and any blocked-click exception class.
+
+**Persisted data decides the result.** After the stale action, use Tab B for fresh
+verified Login and refreshed My Courses under B, then A. B must match its original
+complete map with X absent; A must retain exactly one X and every original Course.
+Both inspections are attempted even if B's first inspection fails. Blank or blocked
+UI is acceptable only if these stored-state assertions pass. Unauthorized removal
+of X remains a failure even if A's original map is restored by that removal.
+
+Finally, reuse `CrossAccountEnrollmentSupport`'s owner-verified cleanup and
+unchanged `EnrollmentSupport.finish`. Only A owns X. Fresh A Login/identity and an
+exact count gate cancellation; absent X is skipped, duplicate matches are refused.
+Refresh and require A's original map. Then **independently verify B's original map
+read-only**, even if A recovery or cancellation failed. No B Course is ever claimed
+or cancelled, and no course is enrolled during cleanup. Failure evidence precedes
+recovery; cleanup errors are suppressed on the primary failure, or fail an otherwise
+successful test. The temporary tab closes after cleanup through existing AccountTabs.
+Both fixture passwords are redacted from milestone evidence and nested diagnostics.
+
+PowerShell, from the extracted project root:
+
+```powershell
+.\gradlew.bat compileJava compileTestJava
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests.staleAccountTabShouldNotMutateCoursesAfterAccountSwitch"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests" --tests "vn.cybersoft.vlearning.tests.EnrollTests" --tests "vn.cybersoft.vlearning.tests.CancelTests"
+.\gradlew.bat test
+```
+
+Linux/macOS: replace `.\gradlew.bat` with `bash gradlew`. Use the preserved JDK 26
+and Chrome configuration. Do not overlap runs using either account.
+
+**v1.1.25 verification:** 37 Java sources, 65 TestNG methods, all 64 prior scenarios
+preserved verbatim, valid unchanged XML and complete ZIP checks passed. **231 offline
+checks passed:** 102 E2E-004 simulations, 55 checks of the actual AccountPage
+(including prior stale-action checks), and 74 E2E-002 regression checks of the reused
+support. These use simulated Selenium/framework APIs. The AccountPage validation
+copy only substitutes `get(0)` for `getFirst()` to compile on the available JDK 17;
+the project source is not altered for that limitation.
+
+All five real Wrapper commands above were attempted and **BLOCKED before compilation
+or TestNG** by `Network is unreachable` downloading Gradle 9.7.1. This environment
+also lacks JDK 26 and Chrome. No live authorization outcome, enrollment/cancellation,
+Allure report or new application defect was observed. See `CHANGE_REPORT.md` for
+the exact scope and verification limits.
+
+## E2E-003 — Guest to Authenticated Course Enrollment
+
+`E2ETests.guestShouldCompleteEnrollmentAfterLogin`, group `e2e-tc3`, uses the
+existing `EnrollInput` account in one TestNG method and one WebDriver session:
+
+Guest → captured Course X card → Detail X → Enroll → Login → actual return to
+Detail X → authenticated Enroll → success → My Courses → refresh → persistence → cleanup.
+
+A read-only setup logs in, verifies the loaded Account and captures the complete
+refreshed My Courses baseline. Existing frontend selection finds an absent Course
+and captures its category, href and exact stikerCard name. The test rechecks absence
+and uses application logout. The business journey then starts on Homepage as a guest.
+No original enrollment is removed to make a Course available.
+
+The guest opens the captured card, stores its actual Detail URL and clicks Enroll.
+The Login route and existing form must appear. Normal Login must return to that
+same original Detail URL; leaving Login alone is insufficient. **The test never
+refreshes or navigates the original tab to repair Login's return.** A wrong return
+fails before any authenticated enrollment attempt.
+
+After proving the actual return, a temporary read-only Account tab in the same
+WebDriver verifies the loaded owner and refreshed course absence. This reuses
+`AccountSupport.AccountTabs`, closes the temporary tab and switches back to the
+unchanged original Detail. It does not log in again, alter authentication, or load
+a replacement Detail. This extra observation is necessary because the existing
+header confirms authentication without exposing a verified account-name locator.
+Business assertions remain visible in E2ETests. The original tab must still have
+its captured Detail URL and a ready enrollment control before proceeding.
+
+Only the authenticated click records ownership. The new
+`CancellationSupport.markEnrollmentAttempt(course)` validates the captured identity
+against its original baseline and performs **no navigation or click**. E2E-003 then
+clicks directly on the application's returned Detail; it does not call
+`CancellationSupport.enroll(...)`. The exact existing success title, one exact
+My Courses entry, and the original map plus X are required before and after an
+owner-gated refresh. Unexpected or duplicate popup titles fail without substituting
+a different course.
+
+The existing `CancellationSupport.finish` / `EnrollmentSupport.finish` cleanup
+removes only the owned X and requires a refreshed original map. A failed partial
+write remains owned. Guest-only attempts create no cleanup ownership. Failure
+screenshots are preserved before recovery, including before a failing observation
+tab is closed. Recovery checks an existing session's loaded account and logs out a
+different owner before restoring the Enrollment account. Unverified ownership or
+ambiguous titles block cancellation. Cleanup errors are suppressed on the primary
+failure; cleanup failure after successful assertions fails the test.
+
+PowerShell, from the extracted project root:
+
+```powershell
+.\gradlew.bat compileJava compileTestJava
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests.guestShouldCompleteEnrollmentAfterLogin"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.LoginTests" --tests "vn.cybersoft.vlearning.tests.EnrollTests" --tests "vn.cybersoft.vlearning.tests.AccountTests" --tests "vn.cybersoft.vlearning.tests.CancelTests"
+.\gradlew.bat test
+```
+
+Linux/macOS: replace `.\gradlew.bat` with `bash gradlew`. Keep JDK 26, installed
+Chrome and sequential runs; do not overlap tests using the same account.
+
+**Historical v1.1.24 verification:** package/Java syntax, existing-method preservation, local
+imports, XML and archive checks passed: 37 Java sources and 64 TestNG methods.
+**74 offline guest-journey checks and 38 offline Cancellation/ENROLL-008 regression
+checks passed** against simulated Page Objects/framework APIs. They execute actual
+scenario/support code but do not prove live application behavior. All five Wrapper
+commands above were attempted and **BLOCKED before compilation/TestNG** by
+`Network is unreachable` downloading Gradle 9.7.1. The environment has Java 17 and
+no Chrome; the configured JDK 26 is unavailable. There is no live PASS, generated
+Allure report or newly observed application defect. See `CHANGE_REPORT.md`.
+
+## E2E-002 — Cross-Account Enrollment Isolation
+
+`E2ETests.courseEnrollmentShouldRemainIsolatedBetweenAccounts`, group `e2e-tc2`,
+is one independent method in one BaseTest browser session. It uses the confirmed
+`EnrollInput` account (A) and `AccountInput.UPDATE_*` account (B); it never registers
+another account. Normal application logout/Login separates all account transitions.
+
+Both loaded Account identities are verified and both original My Courses maps are
+captured after refresh, before mutation. Frontend category/card discovery excludes
+the union of their original titles, rechecks candidates under both current accounts
+and tries another eligible card if a candidate is already enrolled. The one captured
+category/href/exact name is then reused for A and B.
+
+A enrolls successfully and must own exactly one X alongside its original courses.
+After switching to B and refreshing, **B must still have zero X and its unchanged
+original map before B enrolls**. B then enrolls in that same X and must receive the
+existing exact success title and one entry; rejection is recorded and fails without
+substituting another course. A logs in again, cancels its exact X, and restores its
+baseline before and after refresh. Finally B logs in and refreshes: **B must still
+have exactly one X plus every original course identity/count**.
+
+`CrossAccountEnrollmentSupport` keeps ownership separately for Account + captured
+Course, immediately before each enrollment click. A partial write remains owned.
+Its `finally` cleanup preserves the primary failure screenshot before recovery,
+then independently opens Homepage, logs out any active session, explicitly logs in
+as each owner and verifies the actual loaded identity. It refreshes My Courses,
+skips an already absent X, and delegates only a remaining unique owned X to unchanged
+`EnrollmentSupport.finish`. Each final refreshed map must equal that account's
+original map. Failure for A never skips B. Cleanup failures are suppressed on the
+business failure or fail an otherwise successful scenario. Original enrollments
+are never cancelled or recreated; ambiguous matches are rejected.
+
+Milestones and cleanup results use Log4j and Allure with both passwords redacted.
+A failure screenshot is omitted if an unmasked Login password field is observed.
+The existing account-response/active-panel waits gate snapshots; an empty loading
+shell is insufficient. Do not run this test concurrently with any other run using
+either account. The existing sequential suite configuration is preserved.
+
+Run from the extracted project root (PowerShell):
+
+```powershell
+.\gradlew.bat compileJava compileTestJava
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests.courseEnrollmentShouldRemainIsolatedBetweenAccounts"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.AccountTests" --tests "vn.cybersoft.vlearning.tests.EnrollTests" --tests "vn.cybersoft.vlearning.tests.CancelTests"
+.\gradlew.bat test
+```
+
+Linux/macOS: replace `.\gradlew.bat` with `bash gradlew`. Use JDK 26 and Chrome,
+matching the preserved project configuration. IntelliJ can run this method or the
+E2ETests class directly after Gradle sync; `e2e-tc2` is also a TestNG group.
+
+**Historical v1.1.23 verification:** 37 Java sources parse; packages/local import references,
+63 test methods, preservation, suite registration and archive checks pass. **74
+focused offline checks pass** using simulated Page Objects/framework APIs; these
+exercise the actual new scenario and cleanup code, not the live website. All five
+real Wrapper commands above were attempted and **BLOCKED before compilation/TestNG**
+by `Network is unreachable` downloading Gradle 9.7.1. This environment has Java 17,
+not JDK 26, and no Chrome. Full compilation, E2E-001/E2E-002, regression and the full
+suite have **no live PASS result**. No Allure output or new application defect was
+observed. The carried-forward E2E-001 reload fix remains unverified in a browser here.
+See `CHANGE_REPORT.md` for the exact file list and validation limits.
+
+## E2E-001 — Complete New Student Lifecycle
+
+`E2ETests.newStudentShouldCompleteCourseLifecycle`, group `e2e-tc1`, is one
+independent TestNG method in one browser session:
+
+Register → Login → Account → Browse → Course Detail → Enroll → My Courses →
+application Logout → Login → My Courses → Cancel → Refresh → Verify.
+
+The test generates its own unique Account/Email and uses `RegisterInput.Correct`
+for registration values. It checks the native Group dropdown/option, explicitly
+selects the expected Group and verifies registration success. It waits for the
+popup to close, reloads the page using the latest local Login fix, and explicitly
+logs in with the generated credentials. `LoginPage` is unchanged; the earlier
+intercepted-click/overlay patch is superseded by this reload correction. All six profile values must match registration,
+including learner type `Học viên`; a URL change alone is insufficient.
+
+It captures a loaded read-only My Courses baseline, selects a real frontend Course
+outside that baseline, rechecks exact absence, and opens the captured category/card
+href/name. Existing Course Detail readiness requires the root, closed dialog and
+clickable enrollment control. After the exact existing enrollment-success popup,
+the Course must appear exactly once alongside unchanged original Courses. A real
+application logout and second explicit Login must retain the same profile and
+Course enrollment. Exact cancellation must remove only that Course, and an
+authenticated refresh must still show zero occurrences and the original baseline.
+
+`E2ESupport` owns only this test's baseline, selection, attempted enrollment,
+evidence and cleanup. Ownership is recorded immediately before the enrollment
+click. Its `finally` cleanup captures a failure screenshot before recovery, checks
+the actual loaded Account, ends an unrelated account session if necessary, and
+uses existing Login recovery for the generated student. The authenticated header
+alone never authorizes cancellation. Unchanged `EnrollmentSupport.finish` receives
+only the generated Account and its exact owned Course. A final refreshed snapshot
+must match the original identities/counts. Ambiguous matches are rejected; original
+Courses are never cancelled or recreated. Cleanup failures are suppressed on the
+primary failure, or fail a scenario that otherwise passed. No fixed Enrollment
+account credentials are used; only `EnrollInput.SUCCESS_TITLE` is reused.
+
+**Persistent side effect:** registration can leave a new student account in the
+backend, even if a later step fails. No verified account-deletion flow exists.
+Cleanup removes the test-owned enrollment where possible; it does not delete the
+student account. This is an execution side effect, not an invented application defect.
+
+PowerShell commands from the extracted project root:
+
+```powershell
+.\gradlew.bat compileJava compileTestJava
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests.newStudentShouldCompleteCourseLifecycle"
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests"
+.\gradlew.bat clean test
+```
+
+Linux/macOS: replace `.\gradlew.bat` with `bash gradlew`. Keep the existing JDK 26,
+Chrome and sequential TestNG configuration. IntelliJ may run the method, class or
+`src/test/resources/testng.xml` directly after Gradle sync.
+
+**Historical v1.1.22 validation (before the later reload correction):** source/AST preservation, local imports, XML and archive checks
+passed; 51 focused checks passed against simulated dependencies/UI. Compilation,
+the independent E2E method and its class were attempted through the real Wrapper;
+all three stopped before compilation/TestNG with `Network is unreachable` while
+downloading Gradle 9.7.1. JDK 26 and Chrome are unavailable here. Live E2E and the
+full suite are **BLOCKED / NOT RUN**, and no Allure results/report were generated.
+The offline checks are not live Selenium PASS results. See `CHANGE_REPORT.md`.
 
 ## Cancellation tests and ENROLL-008
 
@@ -122,7 +397,7 @@ Linux/macOS: replace `.\gradlew.bat` with `bash gradlew`. Groups are available t
 TestNG; the commands above use existing Gradle method/class filtering without adding
 new build configuration.
 
-**v1.1.21 verification:** source/AST preservation, package/import references, suite
+**Historical v1.1.21 verification:** source/AST preservation, package/import references, suite
 registration and ZIP checks passed. **56 focused offline checks passed** with
 simulated dependencies/UI, including the four scenario bodies and cleanup failures.
 The complete `compileJava compileTestJava` attempt was **BLOCKED** before compilation:
@@ -286,7 +561,7 @@ download. This environment also lacks Java 26 and Chrome. No new test or Account
 suite was executed, and no live mutation, restoration or enrollment cleanup result
 is claimed. Syntax/preservation and 113 offline checks passed using simulated
 dependencies/UI. These are not a full Gradle build or live Selenium PASS.
-The current v1.1.21 validation is summarized in the Cancellation section and `CHANGE_REPORT.md`.
+Current v1.1.25 validation is summarized in the E2E-004 section and `CHANGE_REPORT.md`.
 
 ## Enrollment tests
 
@@ -659,6 +934,17 @@ Register and Course List test classes are unchanged in this release.
   targeted cleanup through unchanged `EnrollmentSupport.finish`.
 - `CancelTests`: exactly three independent public `@Test` scenario methods; no helpers,
   models, locators or low-level browser operations.
+- `E2ETests`: exactly four public `@Test` scenario methods with visible business assertions.
+- `CrossAccountEnrollmentSupport`: two verified account sessions, independent immutable
+  baselines and Account + Course ownership; shared frontend selection, redacted evidence
+  and independent owner-verified cleanup. The original constructor retains E2E-002's
+  identity; an overload labels E2E-004 evidence. The new finish operation reuses owned
+  cleanup and independently verifies the other account read-only. It reuses existing
+  Login and cancellation helpers.
+- `E2ESupport`: generated-student baseline, existing frontend selection, attempted-course
+  ownership, owner-verified session recovery and cleanup through `EnrollmentSupport`.
+  This class remains unchanged. E2E-003 and its existing CancellationSupport and
+  AccountSupport.AccountTabs operations are preserved.
 - `EnrollInput`: the small Enrollment credential/expected-message holder.
 - `CourseCardDomReader`: reused card parsing; existing Course List calls retain their
   behavior.
@@ -666,16 +952,18 @@ Register and Course List test classes are unchanged in this release.
   comparison reused without changing its algorithm.
 - `RegisterPage`: additive success-dialog close wait and normal Register-to-Login
   navigation; all existing members remain unchanged. Existing LoginPage methods, registration
-  fixtures/randomizers remain unchanged. All 57 prior test methods are preserved.
+  fixtures/randomizers remain unchanged. All 64 prior test methods are preserved
+  verbatim, including E2E-001's local reload correction, E2E-002 and E2E-003.
 
-This release uses the complete local **v1.1.20** project, including ACCOUNT-014–016.
-GitHub main was checked on 2026-10-14 at
-`6dad733c11f98a2b0637d591e1a52cbb2f455b7e` and remains v1.1.19; its older Account
-files did not overwrite the newer local work. All 57 previous tests and every existing
-Java member remain intact. Exactly three Cancellation methods and ENROLL-008 are added.
-Version increments once: **1.1.20 → 1.1.21**. Dependencies, Wrapper, BaseTest,
-credentials and existing locators are unchanged. The TestNG XML preserves all six
-previous class registrations and adds `CancelTests` once. No GitHub push/merge.
+This release starts from the complete local **v1.1.24** project (64 tests).
+GitHub main `3d82310b87d4d42b59f41552efaa2acd92cd5605` was checked on 2026-10-16
+and remains v1.1.21 (61 tests). Exactly one new scenario is added. Version increments
+once: **1.1.24 → 1.1.25**. AccountPage receives additive owner/target observation
+around its unchanged single stale cancellation. CrossAccountEnrollmentSupport receives
+the narrow reuse/evidence/independent-check extensions described above. Other Page
+Objects, AccountSupport/AccountTabs, CancellationSupport, fixtures, BaseTest,
+dependencies, Wrapper and `testng.xml` remain unchanged. E2ETests stays registered
+once. There are no new classes and no GitHub commit, push or merge.
 
 ## Allure and results
 

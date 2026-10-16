@@ -938,6 +938,40 @@ public class AccountPage extends BasePage {
         return exactCancellationNow(courseName) != null;
     }
 
+    public record StaleCourseCancellationObservation(String loadedAccount, StaleActionObservation action) {}
+
+    /** Read only until the old page still identifies its original owner and one exact target. */
+    public StaleCourseCancellationObservation cancelStaleCourseForAccountOnceAndObserve(
+            String expectedStaleAccount, String courseName) {
+        requireName(courseName);
+        StaleUiState before = readStaleUi(null, courseName);
+        String actual = before.blank() || before.loginDisplayed() ? "" : readLoadedCourseAccountNow();
+        if (!expectedStaleAccount.equals(actual) || before.blank() || before.loginDisplayed()
+                || !before.targetAvailable() || before.exactCourseCount() != 1
+                || !hasLoadedCourseOwner(expectedStaleAccount)) {
+            return new StaleCourseCancellationObservation(actual, new StaleActionObservation(
+                    "Hủy khóa học: " + courseName, before, before, false, false,
+                    "No safe original-account target; loaded Account=" + actual
+                            + "; expected stale owner=" + expectedStaleAccount
+                            + ". Blank, Login, changed/unknown owner or unavailable target; no click."));
+        }
+        // Reuse the existing single WebDriver click and observation; no authorized-removal wait or retry.
+        return new StaleCourseCancellationObservation(actual, cancelExactCourseOnceAndObserve(courseName));
+    }
+
+    /** Same confirmed labeled response used by hasLoadedCourseOwner, including the hidden personal pane. */
+    private String readLoadedCourseAccountNow() {
+        List<String> accounts = new ArrayList<>();
+        for (WebElement info : driver.findElements(PERSONAL_INFO)) {
+            for (WebElement field : info.findElements(ACCOUNT_FIELDS)) {
+                String text = normalize(field.getDomProperty("textContent"));
+                if (text.startsWith("Tài khoản:")) accounts.add(text.substring("Tài khoản:".length()).strip());
+            }
+        }
+        if (accounts.size() > 1) throw new IllegalStateException("Ambiguous loaded Account identity; refusing stale cancellation.");
+        return accounts.isEmpty() ? "" : accounts.get(0);
+    }
+
     private By staleProfileTarget(StaleProfileAction action) {
         return switch (action) {
             case FULL_NAME -> EDIT_FULL_NAME;
