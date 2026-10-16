@@ -216,6 +216,15 @@ public final class AccountSupport {
             this.tabA = driver.getWindowHandle();
         }
 
+        /** Observe the shared authenticated Account without navigating or refreshing the original tab. */
+        public AccountPage openAccountInSecondTab(String expectedAccount) {
+            if (tabB != null) throw new IllegalStateException("Each observation needs a new Tab B.");
+            driver.switchTo().newWindow(WindowType.TAB);
+            tabB = driver.getWindowHandle();
+            return new HomePage(driver).open().waitUntilAuthenticated().goToAccountPage()
+                    .waitUntilPersonalInformationReady(expectedAccount);
+        }
+
         public TabLogout logoutInSecondTab(String expectedAccount) {
             if (tabB != null) throw new IllegalStateException("Each attempt needs a new Tab B.");
             driver.switchTo().newWindow(WindowType.TAB);

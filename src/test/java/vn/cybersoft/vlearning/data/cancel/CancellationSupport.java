@@ -32,6 +32,7 @@ public final class CancellationSupport {
     private final List<EnrollmentCourse> selected = new ArrayList<>();
     private final Map<String, EnrollmentCourse> owned = new LinkedHashMap<>();
     private Map<String, Integer> original;
+    private boolean failureEvidenceAttempted;
 
     public CancellationSupport(WebDriver driver, String testId) {
         this.driver = driver;
@@ -42,6 +43,12 @@ public final class CancellationSupport {
         if (original != null) throw new IllegalStateException("The pre-test baseline must only be captured once.");
         AccountPage page = AccountSupport.loginAndOpenAccount(driver, EnrollInput.ACCOUNT, EnrollInput.PASSWORD)
                 .openMyCourses(EnrollInput.ACCOUNT).refreshMyCourses(EnrollInput.ACCOUNT);
+        captureBaseline(page);
+    }
+
+    /** Reuse a caller's already verified, refreshed Account page without another Login/navigation. */
+    public void captureBaseline(AccountPage page) {
+        if (original != null) throw new IllegalStateException("The pre-test baseline must only be captured once.");
         original = page.captureMyCourseCounts(EnrollInput.ACCOUNT);
         record("Original My Courses (read-only)", new TreeMap<>(original));
     }
@@ -80,6 +87,26 @@ public final class CancellationSupport {
 
     /** Each attempt rechecks absence; ownership survives cancellation and the second enrollment attempt. */
     public String enroll(EnrollmentCourse course) {
+        requireOwnableCourse(course);
+        AccountPage page = openMyCourses().refreshMyCourses(EnrollInput.ACCOUNT);
+        page.requireCourseNotEnrolled(course.courseName());
+        CourseDetailPage detail = new HomePage(driver).goToCourseCategory(course.categoryUrl())
+                .openCourseForEnrollment(course);
+        // Immediately before EACH click, including re-enrollment. A timed-out click may still have persisted.
+        markEnrollmentAttempt(course);
+        detail.clickEnroll();
+        String title = detail.waitForEnrollmentPopupTitle();
+        record("Enrollment response", course + "; popup=" + title);
+        return title;
+    }
+
+    /** No navigation or click. Call only after verified owner/absence checks, immediately before enrollment. */
+    public void markEnrollmentAttempt(EnrollmentCourse course) {
+        requireOwnableCourse(course);
+        owned.put(course.courseName(), course);
+    }
+
+    private void requireOwnableCourse(EnrollmentCourse course) {
         requireBaseline();
         if (!selected.contains(course) || original.containsKey(course.courseName())) {
             throw new IllegalStateException("Refusing enrollment ownership for an unselected or pre-existing Course.");
@@ -88,16 +115,6 @@ public final class CancellationSupport {
         if (previous != null && !previous.equals(course)) {
             throw new IllegalStateException("One owned title cannot identify different captured Courses.");
         }
-        AccountPage page = openMyCourses().refreshMyCourses(EnrollInput.ACCOUNT);
-        page.requireCourseNotEnrolled(course.courseName());
-        CourseDetailPage detail = new HomePage(driver).goToCourseCategory(course.categoryUrl())
-                .openCourseForEnrollment(course);
-        // Immediately before EACH click, including re-enrollment. A timed-out click may still have persisted.
-        owned.put(course.courseName(), course);
-        detail.clickEnroll();
-        String title = detail.waitForEnrollmentPopupTitle();
-        record("Enrollment response", course + "; popup=" + title);
-        return title;
     }
 
     public AccountPage openMyCourses() {
@@ -127,23 +144,36 @@ public final class CancellationSupport {
         return actual;
     }
 
-    /** No enrollment is attempted here; only verified owned titles are delegated to existing cancellation cleanup. */
-    public void finish(Throwable primaryFailure) {
-        List<Throwable> failures = new ArrayList<>();
-        if (primaryFailure != null && driver instanceof TakesScreenshot screenshots) {
+    /** Also callable before closing a read-only observation tab, while the failing UI is still visible. */
+    public void preserveFailureEvidence(Throwable primaryFailure) {
+        if (!failureEvidenceAttempted && primaryFailure != null && driver instanceof TakesScreenshot screenshots) {
+            failureEvidenceAttempted = true;
             try {
                 Allure.addAttachment(testId + " failure before recovery/cleanup", "image/png",
                         new ByteArrayInputStream(screenshots.getScreenshotAs(OutputType.BYTES)), ".png");
-            } catch (RuntimeException evidenceFailure) {
-                failures.add(safeCleanupFailure(evidenceFailure));
+            } catch (RuntimeException | AssertionError evidenceFailure) {
+                primaryFailure.addSuppressed(safeCleanupFailure(evidenceFailure));
             }
         }
+    }
+
+    /** No enrollment is attempted here; only verified owned titles are delegated to existing cancellation cleanup. */
+    public void finish(Throwable primaryFailure) {
+        List<Throwable> failures = new ArrayList<>();
+        preserveFailureEvidence(primaryFailure);
         if (owned.isEmpty()) {
             recordCleanup(failures, "Cleanup", "No enrollment attempt; no cancellation performed.");
         } else {
             try {
                 // Navigation recovers even a blank page. openMyCourses verifies the actual account owner.
                 HomePage home = new HomePage(driver).open();
+                if (home.isAuthenticated()) {
+                    String activeAccount = home.goToAccountPage().getPersonalAccount();
+                    if (!EnrollInput.ACCOUNT.equals(activeAccount)
+                            && (!home.logoutIfAuthenticated() || home.isAuthenticated())) {
+                        throw new IllegalStateException("Could not end the other account's session; refusing owned cleanup.");
+                    }
+                }
                 LoginSupport.restoreSessionForCleanup(driver, EnrollInput.ACCOUNT, EnrollInput.PASSWORD);
                 AccountPage page = home.goToAccountPage().openMyCourses(EnrollInput.ACCOUNT)
                         .refreshMyCourses(EnrollInput.ACCOUNT);
@@ -203,7 +233,7 @@ public final class CancellationSupport {
         if (original == null) throw new IllegalStateException("Capture the authenticated pre-test Course baseline first.");
     }
 
-    private void record(String stage, Object observation) {
+    public void record(String stage, Object observation) {
         String text = String.valueOf(observation).replace(EnrollInput.PASSWORD, "[REDACTED]");
         LOGGER.info("{} | {} | {}", testId, stage, text);
         Allure.addAttachment(testId + " " + stage, "text/plain", text, ".txt");
