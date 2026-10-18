@@ -184,11 +184,9 @@ public final class CourseSubCardContentSupport {
         SubCardContent subCard =
                 course.subCard();
 
-        compareRequired(
+        requireSubCardValue(
                 "Course name",
-                parent.courseName(),
                 subCard.courseName(),
-                true,
                 issues
         );
 
