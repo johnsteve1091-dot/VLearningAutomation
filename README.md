@@ -1,29 +1,173 @@
-# STAB-010: Course Card / SubCard comparison correction
+# V Learning Automation
 
-Baseline checked: GitHub `johnsteve1091-dot/VLearningAutomation` main at `bfbe5938f35bf63c68992de8da4a0d389576d3c0`.
+**Selenium WebDriver automation testing framework for the Cybersoft V Learning demo website.**
 
-## What changes
-- `CourseSubCardContentSupport.inspect()` requires a nonblank SubCard course title instead of comparing the SubCard title to the parent card's promotional `h6`.
-- Keeps all instructor-name, duration/week/level, avatar, description, detail-button, and missing-SubCard checks.
-- Keeps the public `courseNamesMatch()` helper used by COURSE-DETAIL-005 for actual course-title comparisons.
-- Updates TestNG @Story and @Description for COURSE-INTEGRITY-003A/B/C. Test names, TestNG groups, methods, reporting and Allure attachments stay unchanged.
+This project is a Java-based UI test automation capstone covering the learner journey from authentication and course discovery through enrollment, account management, course cancellation, and end-to-end scenarios.
 
-## Apply from your existing VLearningAutomation project directory (PowerShell)
+- **System under test:** [Cybersoft V Learning](https://demo2.cybersoft.edu.vn/)
+- **Test framework:** Selenium WebDriver + TestNG
+- **Build and reporting:** Gradle Wrapper + Allure
+- **Current automated scope:** **65 TestNG test methods in 8 test departments**
 
-Extract the ZIP into the project root (replace `$HOME\Downloads` if you saved it elsewhere):
+> **Testing status:** This framework tests a live demo website that has documented defects and unresolved UI-contract questions. A failed assertion may reveal a real website issue, an incorrect test expectation, or an environmental problem. The repository does **not** claim a fully passing regression suite. See [Known Defects and Test Exceptions](docs/KNOWN_DEFECTS.md).
+
+## Test coverage
+
+The suite is organized into eight independent functional departments, with shared end-to-end scenarios connecting them.
+
+| Department | Test class | Methods | Coverage |
+| --- | --- | ---: | --- |
+| **Login** | `LoginTests` | 5 | Successful and invalid login, required controls, password masking |
+| **Register** | `RegisterTests` | 14 | Registration, required fields, data-format validation, boundaries, duplicate credentials |
+| **Course List** | `CourseListTests` | 10 | Course-card links, SubCard structure/content, main-card integrity across Homepage, catalogue, and categories |
+| **Course Detail** | `CourseDetailTests` | 5 | Core details, curriculum, related courses, navigation, cross-page content consistency |
+| **Enrollment** | `EnrollTests` | 8 | Enrollment, guest redirection, return after login, persistence, duplicate prevention, multiple courses, re-enrollment |
+| **Account** | `AccountTests` | 16 | Personal information, profile editing and validation, unsaved changes, account switching, stale-session actions |
+| **Cancellation** | `CancelTests` | 3 | Cancel a specific course, preserve other enrollments, verify cancellation after refresh |
+| **End-to-End (E2E)** | `E2ETests` | 4 | New-student lifecycle, cross-account isolation, guest-to-enrollment flow, stale-tab protection |
+| **Total** | **8 test classes** | **65** | |
+
+These are implemented test methods, **not** a claim of 65 passes. The authoritative suite declaration is [`src/test/resources/testng.xml`](src/test/resources/testng.xml).
+
+## Technology stack
+
+| Component | Version / role |
+| --- | --- |
+| Java | **26** (configured Gradle toolchain) |
+| Selenium WebDriver | **4.49.0** |
+| TestNG | **7.12.0** |
+| Gradle Wrapper | **9.7.1** |
+| Google Chrome | Browser used by the test setup |
+| Allure Gradle plugin | **4.3.0** |
+| Allure report runtime | **3.14.3** |
+| Allure Java/TestNG adapter | **2.35.5** |
+| Log4j | **2.26.1** |
+| Architecture | Page Object Model (POM), reusable test support and fixtures |
+
+Exact dependencies and reporting settings are maintained in [`build.gradle`](build.gradle).
+
+## Getting started
+
+### Prerequisites
+
+- **JDK 26** installed and selected for the project (including the Gradle JVM in IntelliJ IDEA).
+- **Google Chrome** installed.
+- An internet connection for the Gradle Wrapper, dependencies, Allure provisioning, and the demo website.
+- **Git** to clone the repository; IntelliJ IDEA is optional.
+
+The repository includes the Gradle Wrapper, so **you do not need to install Gradle separately**. The tests create a `ChromeDriver` using Selenium Manager rather than requiring a manually configured ChromeDriver executable.
+
+### Clone and run (Windows PowerShell)
 
 ```powershell
-Expand-Archive -Path "$HOME\Downloads\STAB010-CourseSubCard-Fix.zip" -DestinationPath . -Force
-git apply --check .\STAB010-CourseSubCard-Contract.patch
-git apply .\STAB010-CourseSubCard-Contract.patch
+git clone https://github.com/johnsteve1091-dot/VLearningAutomation.git
+cd VLearningAutomation
+
+# Confirm the wrapper and configured toolchain can start
+.\gradlew.bat --version
+
+# Run the complete TestNG suite
+.\gradlew.bat test
 ```
 
-The check is deliberate: if your local source has changed in those exact sections, stop and do not force the patch. The patch makes no changes to the remote GitHub repository.
+For **macOS/Linux**, use `./gradlew test` (or `bash gradlew test` if the wrapper lacks execute permission).
 
-## One targeted run
+To use **IntelliJ IDEA**, open the cloned repository as a Gradle project, select JDK 26 for the Project SDK and Gradle JVM, sync the Gradle project, then run the Gradle `test` task or the existing TestNG suite.
+
+### Run a department or individual test
+
+From the repository root, for example:
 
 ```powershell
-.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.CourseListTests.everyHomepageSubCardShouldContainCorrectCourseInformation" --tests "vn.cybersoft.vlearning.tests.CourseListTests.everyCourseListSubCardShouldContainCorrectCourseInformation" --tests "vn.cybersoft.vlearning.tests.CourseListTests.everyCategorySubCardShouldContainCorrectCourseInformation"
+# All Login tests
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.LoginTests"
+
+# All E2E tests
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.E2ETests"
+
+# One specific enrollment test method
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.EnrollTests.duplicateEnrollmentShouldBePrevented"
 ```
 
-Expected: The invalid parent-description/title equality failure no longer exists. Actual mismatched instructors, incorrect Detail button content or missing SubCards still fail. This has NOT been run in a real Selenium browser here.
+Replace the class or method name with one from `src/test/java/vn/cybersoft/vlearning/tests/`. The configured full suite registers each of the eight test classes once.
+
+**Important:** Tests interact with real demo-site state. Some tests register accounts, update profiles, enroll in courses, and cancel enrollments. The support classes implement targeted cleanup, but an interrupted or failed run may still require checking test data. Do not run account-mutating suites concurrently against the same accounts.
+
+## Reports and test evidence
+
+The project uses **TestNG assertions**, **Log4j diagnostics**, and **Allure** annotations/attachments. `BaseTest` captures an Allure screenshot on test failure when the browser is available.
+
+### Gradle/TestNG HTML report
+
+After running tests, open:
+
+```text
+build/reports/tests/test/index.html
+```
+
+### Allure report
+
+The Gradle `test` task is configured to invoke `allureReport` as a finalizer. Test failures remain failures; generating an HTML report does not turn them into passes.
+
+To regenerate an Allure report from existing results or launch a local report viewer:
+
+```powershell
+.\gradlew.bat allureReport
+.\gradlew.bat allureServe
+```
+
+- Raw Allure result files and attachments: `build/allure-results/`
+- Generated Allure HTML: `build/reports/allure-report/allureReport/`
+- `allureServe` serves the report locally in a browser.
+
+**Do not run `clean` between collecting test results and regenerating their report**: cleaning deletes the saved build outputs. If the Gradle Wrapper cannot start, TestNG and Allure will not execute.
+
+## Project structure
+
+```text
+VLearningAutomation/
+├── build.gradle                         # Dependencies, Java toolchain, TestNG and Allure
+├── settings.gradle
+├── gradlew / gradlew.bat                # Gradle Wrapper launchers
+├── gradle/wrapper/                      # Wrapper configuration and bootstrap JAR
+├── src/
+│   ├── main/java/vn/cybersoft/vlearning/
+│   │   ├── core/                        # BasePage and common WebDriver interactions
+│   │   └── pages/                       # Page Objects and course-card DOM models
+│   └── test/
+│       ├── java/vn/cybersoft/vlearning/
+│       │   ├── base/                    # BaseTest browser lifecycle and evidence
+│       │   ├── data/                    # Test inputs, fixtures and scenario support
+│       │   └── tests/                   # Eight TestNG test classes
+│       └── resources/testng.xml         # Suite registration
+├── docs/
+│   └── KNOWN_DEFECTS.md                 # Evidence-based defect / exception register
+└── README.md
+```
+
+**Separation of responsibilities:**
+
+- **Test classes** express scenarios and assertions.
+- **Page Objects** own UI locators, browser interactions, and page-specific observations.
+- **Support/fixture classes** handle reusable preparation, test data, result collection, and targeted cleanup.
+- **`BaseTest`** starts a fresh Chrome browser for each test method, opens the demo homepage, captures failure evidence when possible, and cleans up the browser session.
+
+## Known defects and current test status
+
+Read **[docs/KNOWN_DEFECTS.md](docs/KNOWN_DEFECTS.md)** before interpreting test failures or preparing a presentation.
+
+The defect register separates:
+
+1. **Confirmed website defects**, such as invalid course-detail links and inconsistent displayed course information.
+2. **Unconfirmed requirements or UI contracts**, including some SubCard and validation-text expectations.
+3. **Automation and environment exceptions**, which must not be mislabeled as product defects.
+
+The documented **pre-STAB-010 full regression** (18 October 2026) ran **65 tests: 51 passed, 14 failed, 0 skipped**. That is a *historical baseline*, not a verified result for the latest merged source. Subsequent targeted checks are recorded in the defect register, and no new full-suite result is claimed here.
+
+Failures are retained as evidence instead of being hidden or converted into successful tests. Review the current Gradle and Allure reports for an actual executed run when presenting results.
+
+## Project scope
+
+This is an **educational UI automation project** exercising a third-party demo application. It demonstrates browser-based functional testing, Page Object separation, assertions, test-data handling, cleanup, and reporting. It does not claim ownership of the website or guarantee that its live content and behavior remain unchanged.
+
+For implementation detail, consult the source and [`build.gradle`](build.gradle). For verified failure evidence and outstanding questions, consult [`docs/KNOWN_DEFECTS.md`](docs/KNOWN_DEFECTS.md).
