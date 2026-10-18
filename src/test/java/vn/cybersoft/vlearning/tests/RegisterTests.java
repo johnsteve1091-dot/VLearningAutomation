@@ -620,6 +620,7 @@ public class RegisterTests extends BaseTest {
         );
     }
 
+
     @Test(
             testName = "REG-011 - Phone validation",
             description = "REG-011 - Phone validation",
@@ -627,33 +628,61 @@ public class RegisterTests extends BaseTest {
     )
     @Story("Phone validation")
     @Description(
-            "Verify all invalid Phone variations with unique valid Account and Email, "
-                    + "then verify a valid 10-digit Phone with an invalid Account blocker."
+            "Verify invalid Phone lengths and characters, "
+                    + "then verify a valid 10-digit Phone using a fresh "
+                    + "Register form with an invalid Account blocker."
     )
     public void phoneShouldValidateLengthAndCharacters() {
+
         HomePage homePage = new HomePage(driver);
         LoginPage loginPage = homePage.goToLoginPage();
         RegisterPage registerPage = loginPage.goToRegisterPage();
 
         SoftAssert softly = new SoftAssert();
 
-        registerPage.enterAccount(RegisterSupport.generateUniqueAccount());
-        registerPage.enterFullName(RegisterInput.Correct.FULL_NAME);
-        registerPage.enterPassword(RegisterInput.Correct.PASSWORD);
-        registerPage.enterEmail(RegisterSupport.generateUniqueEmail());
+        // ============================================
+        // PART 1: INVALID PHONE VALIDATION
+        // ============================================
+
+        registerPage.enterAccount(
+                RegisterSupport.generateUniqueAccount()
+        );
+        registerPage.enterFullName(
+                RegisterInput.Correct.FULL_NAME
+        );
+        registerPage.enterPassword(
+                RegisterInput.Correct.PASSWORD
+        );
+        registerPage.enterEmail(
+                RegisterSupport.generateUniqueEmail()
+        );
 
         String[][] invalidPhones = {
-                {"fewer than 10 digits", RegisterInput.Wrong.PHONE_TOO_SHORT},
-                {"more than 10 digits", RegisterInput.Wrong.PHONE_TOO_LONG},
-                {"a letter", RegisterInput.Wrong.PHONE_WITH_LETTER},
-                {"a special character", RegisterInput.Wrong.PHONE_WITH_SPECIAL_CHARACTER}
+                {
+                        "fewer than 10 digits",
+                        RegisterInput.Wrong.PHONE_TOO_SHORT
+                },
+                {
+                        "more than 10 digits",
+                        RegisterInput.Wrong.PHONE_TOO_LONG
+                },
+                {
+                        "a letter",
+                        RegisterInput.Wrong.PHONE_WITH_LETTER
+                },
+                {
+                        "a special character",
+                        RegisterInput.Wrong.PHONE_WITH_SPECIAL_CHARACTER
+                }
         };
 
         for (String[] phoneCase : invalidPhones) {
+
             registerPage.enterPhone(phoneCase[1]);
             registerPage.clickRegister();
 
-            String phoneError = registerPage.getPhoneErrorMessage();
+            String phoneError =
+                    registerPage.getPhoneErrorMessage();
 
             Assert.assertFalse(
                     phoneError.isBlank(),
@@ -671,25 +700,66 @@ public class RegisterTests extends BaseTest {
             );
         }
 
-        // Block registration only for the valid Phone acceptance check.
-        registerPage.enterAccount(RegisterInput.Wrong.ACCOUNT_TOO_SHORT);
-        registerPage.enterPhone(RegisterInput.Correct.PHONE);
+        // ============================================
+        // PART 2: RESET REGISTRATION FORM
+        // ============================================
+
+        // Clear previous React/form validation state.
+        // Reuse the working REG-004 approach.
+
+        driver.navigate().refresh();
+
+        loginPage = new LoginPage(driver);
+        registerPage = loginPage.goToRegisterPage();
+
+        // ============================================
+        // PART 3: VALID 10-DIGIT PHONE
+        // ============================================
+
+        // Use a deliberately short Account to prevent
+        // successful registration.
+
+        registerPage.enterAccount(
+                RegisterInput.Wrong.ACCOUNT_TOO_SHORT
+        );
+
+        registerPage.enterFullName(
+                RegisterInput.Correct.FULL_NAME
+        );
+
+        registerPage.enterPassword(
+                RegisterInput.Correct.PASSWORD
+        );
+
+        registerPage.enterEmail(
+                RegisterSupport.generateUniqueEmail()
+        );
+
+        registerPage.enterPhone(
+                RegisterInput.Correct.PHONE
+        );
+
         registerPage.clickRegister();
 
+        // Confirm validation actually occurred.
         Assert.assertEquals(
                 registerPage.getAccountErrorMessage(),
                 RegisterMessage.Format.ACCOUNT_TOO_SHORT,
-                "The Account blocker must confirm validation before checking "
-                        + "Phone error absence."
+                "The Account blocker must confirm validation "
+                        + "before checking Phone error absence."
         );
 
+        // A valid Phone must not show a validation error.
         softly.assertFalse(
                 registerPage.isPhoneErrorDisplayedNow(),
-                "A 10-digit Phone should have no field validation error."
+                "A 10-digit Phone should have no field "
+                        + "validation error."
         );
 
+        // Report all collected Phone validation mismatches.
         softly.assertAll();
     }
+
 
     @Test(
             testName = "REG-012 - Course Group can be selected",

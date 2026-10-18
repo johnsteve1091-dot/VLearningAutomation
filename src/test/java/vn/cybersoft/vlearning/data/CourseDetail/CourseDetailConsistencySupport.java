@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.net.URI;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -19,6 +22,9 @@ import vn.cybersoft.vlearning.pages.CourseDetailPage.RelatedCardSnapshot;
 import vn.cybersoft.vlearning.pages.CourseDetailPage.RelatedCoursesSnapshot;
 import vn.cybersoft.vlearning.pages.CourseListPage;
 import vn.cybersoft.vlearning.pages.HomePage;
+import vn.cybersoft.vlearning.pages.CourseDetailPage.ImageState;
+import vn.cybersoft.vlearning.pages.CourseDetailPage.ElementState;
+import vn.cybersoft.vlearning.pages.CourseCardSnapshot.ParentContent;
 
 /** Deterministic source sampling, cached Detail comparison, defects and TC5 evidence. */
 public final class CourseDetailConsistencySupport {
@@ -44,7 +50,11 @@ public final class CourseDetailConsistencySupport {
         return List.copyOf(candidates);
     }
 
-    public static ComparisonResult compare(CourseCardSnapshot card, DetailIdentitySnapshot detail) {
+
+    public static ComparisonResult compare(
+            CourseCardSnapshot card,
+            DetailIdentitySnapshot detail
+    ) {
         List<FieldComparison> fields = new ArrayList<>();
 
         if (!detail.root().present() || !detail.root().displayed()) {
@@ -52,23 +62,219 @@ public final class CourseDetailConsistencySupport {
                     "destination",
                     "Course Detail root",
                     "displayed Course Detail",
-                    detail.root().present() ? "present but hidden" : "missing",
+                    detail.root().present()
+                            ? "present but hidden"
+                            : "missing",
                     false,
                     "Course Detail root did not load/display."
             ));
             return new ComparisonResult(card, detail, fields);
         }
 
-        compareCourseName(fields, "main card", card.parent().courseName(), detail.courseName().text());
-        compareInstructor(fields, "main card", card.parent().instructorName(), detail.instructorName().text());
+        ParentContent parent = card.parent();
 
+        if (parent == null) {
+            fields.add(new FieldComparison(
+                    "main card", "Card content",
+                    "present", "missing", false,
+                    "Main Course Card snapshot is missing."
+            ));
+            return new ComparisonResult(card, detail, fields);
+        }
+
+        // Course thumbnail
+        compareImage(
+                fields, "main card", "Course image",
+                parent.courseImageSrc(),
+                parent.courseImageDisplayed(),
+                parent.courseImageNaturalWidth(),
+                detail.courseImage(),
+                detail.resultingUrl()
+        );
+
+        // Main card instructor
+        compareInstructor(
+                fields, "main card",
+                parent.instructorName(),
+                detail.instructorName().text()
+        );
+
+        // Main card instructor avatar
+        compareImage(
+                fields, "main card", "Instructor avatar",
+                parent.instructorAvatarSrc(),
+                parent.instructorAvatarDisplayed(),
+                parent.instructorAvatarNaturalWidth(),
+                detail.instructorAvatar(),
+                detail.resultingUrl()
+        );
+
+        // Advertised price
+        comparePrice(fields, parent, detail.price());
+
+        // Actual SubCard course identity
         if (card.hasSubCard() && card.subCard() != null) {
-            compareCourseName(fields, "subCard", card.subCard().courseName(), detail.courseName().text());
-            compareInstructor(fields, "subCard", card.subCard().instructorName(), detail.instructorName().text());
+            compareCourseName(
+                    fields, "subCard",
+                    card.subCard().courseName(),
+                    detail.courseName().text()
+            );
+
+            compareInstructor(
+                    fields, "subCard",
+                    card.subCard().instructorName(),
+                    detail.instructorName().text()
+            );
+
+            compareImageReference(
+                    fields, "subCard", "Instructor avatar",
+                    card.subCard().instructorAvatarSrc(),
+                    detail.instructorAvatar(),
+                    detail.resultingUrl()
+            );
+        } else {
+            fields.add(new FieldComparison(
+                    "subCard", "SubCard presence",
+                    "present", "missing", false,
+                    "Expected Course SubCard is absent."
+            ));
         }
 
         return new ComparisonResult(card, detail, fields);
     }
+
+    private static void compareImage(
+            List<FieldComparison> fields,
+            String source,
+            String fieldName,
+            String advertisedSrc,
+            boolean advertisedDisplayed,
+            long advertisedNaturalWidth,
+            ImageState detailImage,
+            String detailUrl
+    ) {
+        String advertised = resolveImageUrl(advertisedSrc, detailUrl);
+        String actual = resolveImageUrl(detailImage.src(), detailUrl);
+
+        boolean sourceLoaded = advertisedDisplayed
+                && advertisedNaturalWidth > 0;
+        boolean destinationLoaded = detailImage.present()
+                && detailImage.displayed()
+                && detailImage.loaded();
+
+        boolean matches = sourceLoaded
+                && destinationLoaded
+                && !advertised.isBlank()
+                && advertised.equals(actual);
+
+        fields.add(new FieldComparison(
+                source,
+                fieldName,
+                advertised + " [loaded=" + sourceLoaded + "]",
+                actual + " [loaded=" + destinationLoaded + "]",
+                matches,
+                matches ? "" :
+                        "Image missing, broken, or asset URLs differ."
+        ));
+    }
+
+    private static void compareImageReference(
+            List<FieldComparison> fields,
+            String source,
+            String fieldName,
+            String advertisedSrc,
+            ImageState detailImage,
+            String detailUrl
+    ) {
+        String advertised = resolveImageUrl(advertisedSrc, detailUrl);
+        String actual = resolveImageUrl(detailImage.src(), detailUrl);
+
+        boolean matches = !advertised.isBlank()
+                && detailImage.loaded()
+                && detailImage.displayed()
+                && advertised.equals(actual);
+
+        fields.add(new FieldComparison(
+                source, fieldName,
+                advertised, actual, matches,
+                matches ? "" :
+                        "Instructor avatar URL differs or destination image is broken."
+        ));
+    }
+
+    private static String resolveImageUrl(
+            String src,
+            String detailUrl
+    ) {
+        if (src == null || src.isBlank()) {
+            return "";
+        }
+
+        try {
+            return URI.create(detailUrl)
+                    .resolve(src.strip())
+                    .normalize()
+                    .toString();
+        } catch (IllegalArgumentException invalidUrl) {
+            return src.strip();
+        }
+    }
+
+    private static final Pattern PRICE_PATTERN = Pattern.compile(
+            "(?<!\\d)(?:\\d{1,3}(?:\\.\\d{3})+|\\d+)"
+                    + "\\s*(?:đ|₫|VND)(?!\\p{L})",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    private static List<String> extractPrices(String text) {
+        List<String> prices = new ArrayList<>();
+        Matcher matcher = PRICE_PATTERN.matcher(normalize(text));
+
+        while (matcher.find()) {
+            prices.add(matcher.group().replaceAll("[^0-9]", ""));
+        }
+        return prices;
+    }
+
+    private static void comparePrice(
+            List<FieldComparison> fields,
+            ParentContent parent,
+            ElementState detailPrice
+    ) {
+        String advertised = !normalize(parent.discountedPrice()).isBlank()
+                ? parent.discountedPrice()
+                : parent.originalPrice();
+
+        String actual = detailPrice.text();
+
+        List<String> expectedValues = extractPrices(advertised);
+        List<String> actualValues = extractPrices(actual);
+
+        boolean singlePrice = expectedValues.size() == 1
+                && actualValues.size() == 1;
+
+        boolean matches = singlePrice
+                && expectedValues.getFirst().equals(actualValues.getFirst());
+
+        String reason = "";
+
+        if (!singlePrice) {
+            reason = "Price cannot be compared reliably from current text; "
+                    + "inspect the original/discounted price DOM.";
+        } else if (!matches) {
+            reason = "Advertised selling price differs from Course Detail price.";
+        }
+
+        fields.add(new FieldComparison(
+                "main card",
+                "Price",
+                advertised,
+                actual,
+                matches,
+                reason
+        ));
+    }
+
 
     private static void compareCourseName(List<FieldComparison> fields, String source,
                                           String advertisedValue, String detailValue) {
@@ -415,3 +621,4 @@ public final class CourseDetailConsistencySupport {
         }
     }
 }
+

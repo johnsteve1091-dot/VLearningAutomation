@@ -96,23 +96,19 @@ public class AccountTests extends BaseTest {
         registerPage.clickRegister();
         Assert.assertTrue(registerPage.isSuccessfulRegistrationPopupDisplayed(),
                 "The new Account must register successfully before its profile can be verified.");
+
         registerPage.waitUntilRegistrationPopupClosed();
 
-        LoginPage loginPage;
-        if (homePage.isAuthenticated()) {
-            homePage.logoutIfAuthenticated();
-            loginPage = homePage.goToLoginPage();
-        } else {
-            loginPage = registerPage.goToLoginPage();
-        }
-        loginPage.enterAccount(account);
-        loginPage.enterPassword(RegisterInput.Correct.PASSWORD);
-        loginPage.clickLogin();
-        if (!loginPage.waitUntilLoggedIn()) {
-            throw new IllegalStateException("ACCOUNT-002 setup failed: explicit new-user Login did not complete.");
-        }
-        homePage.waitUntilAuthenticated();
-        var actual = homePage.goToAccountPage().readPersonalInformation(account);
+// Reload after registration to reset the overlay.
+        driver.navigate().refresh();
+
+// Explicit login and verified Account profile.
+        var actual = AccountSupport.loginAndOpenAccount(
+                driver,
+                account,
+                RegisterInput.Correct.PASSWORD
+        ).readPersonalInformation(account);
+
         Allure.addAttachment("ACCOUNT-002 actual Account profile", "text/plain", actual.toString(), ".txt");
 
         SoftAssert softly = new SoftAssert();

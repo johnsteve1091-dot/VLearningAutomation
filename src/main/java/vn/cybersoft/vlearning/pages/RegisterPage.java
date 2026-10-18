@@ -240,4 +240,5 @@ public class RegisterPage extends BasePage {
                         || input.getDomProperty("value").isEmpty()
         );
     }
+
 }

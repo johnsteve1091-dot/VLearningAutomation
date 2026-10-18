@@ -116,32 +116,35 @@ public class HomePage extends BasePage {
         return List.copyOf(courses);
     }
 
-    public List<String> getCourseCategoryUrls() {
 
-        /*
-         * Confirm Homepage/header has rendered before inspecting
-         * the category links.
-         */
+    public List<String> getCourseCategoryUrls() {
         waitUntilVisible(COURSE_LIST_LINK);
 
-        List<WebElement> categoryLinks =
-                driver.findElements(COURSE_CATEGORY_LINKS);
+        new Actions(driver)
+                .moveToElement(waitUntilVisible(CATEGORY_MENU))
+                .perform();
 
-        Set<String> uniqueUrls =
-                new LinkedHashSet<>();
+        return getWait()
+                .ignoring(StaleElementReferenceException.class)
+                .until(currentDriver -> {
+                    Set<String> urls = new LinkedHashSet<>();
 
-        for (WebElement categoryLink : categoryLinks) {
+                    for (WebElement link :
+                            currentDriver.findElements(COURSE_CATEGORY_LINKS)) {
+                        String href = link.getAttribute("href");
 
-            String href =
-                    categoryLink.getAttribute("href");
+                        if (href != null && !href.isBlank()
+                                && link.isDisplayed()) {
+                            urls.add(href.trim());
+                        }
+                    }
 
-            if (href != null && !href.isBlank()) {
-                uniqueUrls.add(href.trim());
-            }
-        }
-
-        return List.copyOf(uniqueUrls);
+                    return urls.isEmpty()
+                            ? null
+                            : List.copyOf(urls);
+                });
     }
+
 
     public HomePage waitUntilAuthenticated() {
         waitUntilVisible(ACCOUNT_LINK);
