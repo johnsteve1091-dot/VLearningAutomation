@@ -178,11 +178,15 @@ public class CourseDetailPage extends BasePage {
         try {
             return getWait().ignoring(StaleElementReferenceException.class).until(currentDriver -> {
                 try {
+
                     latest[0] = new DetailIdentitySnapshot(
                             driver.getCurrentUrl(),
                             readContainer(ROOT),
                             readElement(COURSE_NAME),
-                            readElement(INSTRUCTOR_NAME)
+                            readElement(INSTRUCTOR_NAME),
+                            readImage(COURSE_IMAGE),
+                            readImage(INSTRUCTOR_AVATAR),
+                            readElement(PRICE)
                     );
                 } catch (TimeoutException commandTimeout) {
                     throw new IllegalStateException(
@@ -400,14 +404,14 @@ public class CourseDetailPage extends BasePage {
         private boolean ready() {
             return section.displayed() && heading.displayed() && !heading.text().isBlank() && !cards.isEmpty()
                     && cards.stream().allMatch(card -> {
-                        var content = card.content();
-                        var parent = content.parent();
-                        return card.displayed() && !content.name().isBlank() && !content.href().isBlank()
-                                && !parent.instructorName().isBlank() && !parent.originalPrice().isBlank()
-                                && parent.courseImageNaturalWidth() > 0 && parent.instructorAvatarNaturalWidth() > 0
-                                && (!card.discountedPriceRendered() || !parent.discountedPrice().isBlank())
-                                && (!content.hasSubCard() || !content.subCard().description().isBlank());
-                    });
+                var content = card.content();
+                var parent = content.parent();
+                return card.displayed() && !content.name().isBlank() && !content.href().isBlank()
+                        && !parent.instructorName().isBlank() && !parent.originalPrice().isBlank()
+                        && parent.courseImageNaturalWidth() > 0 && parent.instructorAvatarNaturalWidth() > 0
+                        && (!card.discountedPriceRendered() || !parent.discountedPrice().isBlank())
+                        && (!content.hasSubCard() || !content.subCard().description().isBlank());
+            });
         }
     }
 
@@ -496,14 +500,31 @@ public class CourseDetailPage extends BasePage {
         }
     }
 
-    public record DetailIdentitySnapshot(String resultingUrl, ElementState root,
-                                         ElementState courseName, ElementState instructorName) {
+
+    public record DetailIdentitySnapshot(
+            String resultingUrl,
+            ElementState root,
+            ElementState courseName,
+            ElementState instructorName,
+            ImageState courseImage,
+            ImageState instructorAvatar,
+            ElementState price
+    ) {
         private boolean readyForInspection() {
             return root.displayed()
-                    && courseName.displayed() && !courseName.text().isBlank()
-                    && instructorName.displayed() && !instructorName.text().isBlank();
+                    && courseName.displayed()
+                    && !courseName.text().isBlank()
+                    && instructorName.displayed()
+                    && !instructorName.text().isBlank()
+                    && courseImage.present()
+                    && courseImage.complete()
+                    && instructorAvatar.present()
+                    && instructorAvatar.complete()
+                    && price.present()
+                    && !price.text().isBlank();
         }
     }
+
 
     public record LessonSnapshot(int index, ElementState title) {
     }
@@ -549,7 +570,7 @@ public class CourseDetailPage extends BasePage {
             boolean containersReady = List.of(root, content, title, subtitle, learningObjectives,
                     sidebar, registerButton).stream().allMatch(ElementState::displayed);
             boolean valuesReady = List.of(courseName, instructorName, categoryValue, rating,
-                    reviewCount, description, price, students, duration, lessons, videos, level)
+                            reviewCount, description, price, students, duration, lessons, videos, level)
                     .stream().allMatch(value -> value.present() && !value.text().isBlank());
             // A completed broken image is ready to inspect; loaded() is asserted by the test.
             return containersReady && valuesReady && !learningObjectives.text().isBlank()
@@ -560,3 +581,4 @@ public class CourseDetailPage extends BasePage {
         }
     }
 }
+
