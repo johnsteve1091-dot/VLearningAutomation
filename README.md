@@ -63,14 +63,19 @@ The repository includes the Gradle Wrapper, so **you do not need to install Grad
 git clone https://github.com/johnsteve1091-dot/VLearningAutomation.git
 cd VLearningAutomation
 
-# Confirm the wrapper and configured toolchain can start
+# Confirm the Java installation (should report Java 26)
+java -version
+
+# Check that the Gradle Wrapper can start
 .\gradlew.bat --version
 
-# Run the complete TestNG suite
+# Run all eight TestNG departments
 .\gradlew.bat test
 ```
 
-For **macOS/Linux**, use `./gradlew test` (or `bash gradlew test` if the wrapper lacks execute permission).
+For **macOS/Linux**, use `./gradlew test` (or `bash gradlew test` if the wrapper lacks execute permission). Run `java -version` first on those systems as well.
+
+**Check your setup:** `java -version` should show JDK 26. `gradlew --version` checks the Wrapper and the JVM running Gradle; the Java 26 toolchain required by `build.gradle` must also be available. If a Java toolchain error occurs, verify your JDK installation and the Gradle JVM selected in your IDE before rerunning tests.
 
 To use **IntelliJ IDEA**, open the cloned repository as a Gradle project, select JDK 26 for the Project SDK and Gradle JVM, sync the Gradle project, then run the Gradle `test` task or the existing TestNG suite.
 
@@ -93,34 +98,65 @@ Replace the class or method name with one from `src/test/java/vn/cybersoft/vlear
 
 **Important:** Tests interact with real demo-site state. Some tests register accounts, update profiles, enroll in courses, and cancel enrollments. The support classes implement targeted cleanup, but an interrupted or failed run may still require checking test data. Do not run account-mutating suites concurrently against the same accounts.
 
-## Reports and test evidence
+## Running, observing and reviewing tests
 
-The project uses **TestNG assertions**, **Log4j diagnostics**, and **Allure** annotations/attachments. `BaseTest` captures an Allure screenshot on test failure when the browser is available.
+### Observe a live test run
 
-### Gradle/TestNG HTML report
+Tests use a visible Chrome browser by default. When you run the suite on a desktop:
 
-After running tests, open:
-
-```text
-build/reports/tests/test/index.html
-```
-
-### Allure report
-
-The Gradle `test` task is configured to invoke `allureReport` as a finalizer. Test failures remain failures; generating an HTML report does not turn them into passes.
-
-To regenerate an Allure report from existing results or launch a local report viewer:
+1. `BaseTest` launches a fresh Chrome window and opens the V Learning homepage before each test method.
+2. Selenium interacts with the website: for example, navigating, filling forms, and checking page behavior. Watch the Chrome window to observe those actions.
+3. After a test method, `BaseTest` captures a failure screenshot if possible, clears the session, and closes that Chrome window. This is expected behavior, not necessarily a failure.
+4. Watch the terminal or the IntelliJ Gradle run window for build progress and errors. To request more detailed Gradle diagnostics, run:
 
 ```powershell
+.\gradlew.bat test --tests "vn.cybersoft.vlearning.tests.LoginTests" --info
+```
+
+A red `BUILD FAILED` message does **not** mean every test failed. Check the generated test report for individual passed/failed counts and failure details. If compilation, browser startup, or Gradle provisioning fails, some tests may never execute.
+
+### Open the Gradle/TestNG HTML report
+
+After tests have run, open the generated report from the project root.
+
+```powershell
+# Windows PowerShell
+Start-Process ".\build\reports\tests\test\index.html"
+```
+
+Report path: `build/reports/tests/test/index.html`. In the report, review the summary and open the relevant test class or failed test to see its assertion message and stack trace.
+
+### Generate and open the Allure report
+
+The project uses **TestNG assertions**, **Log4j diagnostics**, and **Allure** annotations/attachments. `BaseTest` attempts to attach a screenshot for a failed test when the browser is available.
+
+The Gradle `test` task runs `allureReport` as a finalizer, even when tests fail. To regenerate Allure from the results already collected, and **open the generated HTML report**:
+
+```powershell
+# Rebuild the report from existing Allure results (does not rerun tests)
 .\gradlew.bat allureReport
+
+# Open the self-contained report in your browser on Windows
+Start-Process ".\build\reports\allure-report\allureReport\index.html"
+```
+
+Alternatively, launch Allure's local report viewer:
+
+```powershell
 .\gradlew.bat allureServe
 ```
 
-- Raw Allure result files and attachments: `build/allure-results/`
-- Generated Allure HTML: `build/reports/allure-report/allureReport/`
-- `allureServe` serves the report locally in a browser.
+`allureServe` opens a local web viewer; stop its server process with **Ctrl+C** when finished. The project configures Allure to generate a single-file HTML report.
 
-**Do not run `clean` between collecting test results and regenerating their report**: cleaning deletes the saved build outputs. If the Gradle Wrapper cannot start, TestNG and Allure will not execute.
+- Raw Allure data and attachments: `build/allure-results/`
+- Generated HTML directory: `build/reports/allure-report/allureReport/`
+- Report to open: `build/reports/allure-report/allureReport/index.html`
+
+For **macOS**, replace `Start-Process` with `open`; for **Linux desktops**, use `xdg-open` with the same relative HTML file path.
+
+Inside Allure, open the test overview, inspect individual passed or failed test cases, read their failure details, and check available attachments such as **Failure Screenshot**. Not every failure has a screenshot (for example, if the browser could not start).
+
+**Important:** Generate reports only after test results exist. Do **not** run `clean` between a test run and regenerating its report, because `clean` removes saved build outputs. If the Gradle Wrapper fails to start, neither TestNG nor Allure runs. Real application defects can leave tests red while report generation succeeds.
 
 ## Project structure
 
