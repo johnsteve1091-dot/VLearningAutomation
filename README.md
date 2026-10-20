@@ -9,7 +9,7 @@ This project is a Java-based UI test automation capstone covering the learner jo
 - **Build and reporting:** Gradle Wrapper + Allure
 - **Current automated scope:** **65 TestNG test methods in 8 test departments**
 
-> **Testing status:** This framework tests a live demo website that has documented defects and unresolved UI-contract questions. A failed assertion may reveal a real website issue, an incorrect test expectation, or an environmental problem. The repository does **not** claim a fully passing regression suite. See [Known Defects and Test Exceptions](docs/KNOWN_DEFECTS.md).
+> **Testing status:** This framework tests a live demo website with documented defects and unresolved UI-contract questions. A failing assertion is not automatically a unique website defect. See the [Test Execution Report](docs/TEST_EXECUTION_REPORT.md) for run outcomes and the [Known Defects and Test Exceptions](docs/KNOWN_DEFECTS.md) for product findings and questions. No fully passing regression is claimed.
 
 ## Test coverage
 
@@ -177,7 +177,8 @@ VLearningAutomation/
 │       │   └── tests/                   # Eight TestNG test classes
 │       └── resources/testng.xml         # Suite registration
 ├── docs/
-│   └── KNOWN_DEFECTS.md                 # Evidence-based defect / exception register
+│   ├── KNOWN_DEFECTS.md                 # Confirmed defects and unresolved UI contracts
+│   └── TEST_EXECUTION_REPORT.md        # Historical run results and failure analysis
 └── README.md
 ```
 
@@ -188,22 +189,19 @@ VLearningAutomation/
 - **Support/fixture classes** handle reusable preparation, test data, result collection, and targeted cleanup.
 - **`BaseTest`** starts a fresh Chrome browser for each test method, opens the demo homepage, captures failure evidence when possible, and cleans up the browser session.
 
-## Known defects and current test status
+## Test results and known defects
 
-Read **[docs/KNOWN_DEFECTS.md](docs/KNOWN_DEFECTS.md)** before interpreting test failures or preparing a presentation.
+The two reporting documents serve different purposes:
 
-The defect register separates:
+- **[Test Execution Report](docs/TEST_EXECUTION_REPORT.md):** Execution date, pass/fail totals for all eight departments, failed-test inventory, evidence locations, and the later targeted verification.
+- **[Known Defects and Test Exceptions](docs/KNOWN_DEFECTS.md):** Confirmed website problems and UI-contract expectations that still need product confirmation.
 
-1. **Confirmed website defects**, such as invalid course-detail links and inconsistent displayed course information.
-2. **Unconfirmed requirements or UI contracts**, including some SubCard and validation-text expectations.
-3. **Automation and environment exceptions**, which must not be mislabeled as product defects.
+The historical full regression on **18 October 2026** ran **65 tests: 51 passed, 14 failed, 0 skipped**, before the STAB-010 test correction. Three Course List tests were rerun afterward, but **no new full-suite outcome** has been established. Do not present this historical total as results from the latest merged code.
 
-The documented **pre-STAB-010 full regression** (18 October 2026) ran **65 tests: 51 passed, 14 failed, 0 skipped**. That is a *historical baseline*, not a verified result for the latest merged source. Subsequent targeted checks are recorded in the defect register, and no new full-suite result is claimed here.
-
-Failures are retained as evidence instead of being hidden or converted into successful tests. Review the current Gradle and Allure reports for an actual executed run when presenting results.
+The project intentionally preserves failing assertions that may reveal real frontend defects. See the local Gradle/Allure reports for evidence from a specific execution.
 
 ## Project scope
 
 This is an **educational UI automation project** exercising a third-party demo application. It demonstrates browser-based functional testing, Page Object separation, assertions, test-data handling, cleanup, and reporting. It does not claim ownership of the website or guarantee that its live content and behavior remain unchanged.
 
-For implementation detail, consult the source and [`build.gradle`](build.gradle). For verified failure evidence and outstanding questions, consult [`docs/KNOWN_DEFECTS.md`](docs/KNOWN_DEFECTS.md).
+For implementation details, consult the source and [`build.gradle`](build.gradle). For historical execution evidence see [`docs/TEST_EXECUTION_REPORT.md`](docs/TEST_EXECUTION_REPORT.md); for confirmed defects and open specification questions see [`docs/KNOWN_DEFECTS.md`](docs/KNOWN_DEFECTS.md).
