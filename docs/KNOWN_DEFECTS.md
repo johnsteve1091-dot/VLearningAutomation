@@ -1,26 +1,16 @@
 # V Learning Automation | Known Defects and Test Exceptions
 
-**Document version:** STAB-011, 18 October 2026  
+**Evidence date:** 18 October 2026; status reviewed 20 October 2026  
 **System under test:** https://demo2.cybersoft.edu.vn/  
 **Repository:** https://github.com/johnsteve1091-dot/VLearningAutomation  
-**Evidence:** `full-regression-results.zip` (Gradle XML, executed 18 October 2026); `COURSE-DETAIL-005-summary.txt` (earlier targeted run); and the **post-STAB-010 targeted rerun results** supplied in chat.  
-**GitHub check:** `main` at `3abd78db04a5fd8a50446f5a1f709f41081e7076` (18 October 2026). This is **not guaranteed to be the same code** as the user's local working directory.
+**Execution evidence:** See [Test Execution Report](TEST_EXECUTION_REPORT.md). Original Gradle XML and Allure evidence remain external/local artifacts; they are not committed to this repository.  
+**Repository status:** STAB-010 was merged in PR #18, the README restored in PR #19, and the historical execution report was added to `main`. These merges do not constitute a new full regression.
 
-## 1. Executive status
+## 1. Purpose and evidence
 
-The **pre-STAB-010 full regression** executed 65 tests: **51 passed, 14 failed, 0 skipped** (78.5% passing). This is an execution baseline, **not** the post-fix full-suite total.
+This document groups **confirmed website defects** and **observed discrepancies requiring requirements confirmation**. It is not a list of every failed test method. The separate [Test Execution Report](TEST_EXECUTION_REPORT.md) records the full regression (65 executed, 51 passed, 14 failed, 0 skipped on 18 October 2026), the failed-test inventory, and the three post-STAB-010 targeted results.
 
-After the local STAB-010 change, only three affected tests were rerun. All three still **failed**, with more focused evidence:
-
-| Test | Post-STAB-010 result | Observed scope |
-|---|---|---|
-| COURSE-INTEGRITY-003A, Homepage SubCard content | FAIL | 12 cards; 20 field issues |
-| COURSE-INTEGRITY-003B, Catalogue SubCard content | FAIL | 249 cards; 249 field issues |
-| COURSE-INTEGRITY-003C, Category SubCard content | FAIL | 249 cards; 498 field issues, down from 747 |
-
-The 249-field decrease in 003C aligns with removing the unsupported comparison between a **promotional main-card `h6`** and the SubCard's **actual course title**. This is evidence that the intended local test correction took effect, **not** evidence that other failures have disappeared.
-
-**Counts are assertions/field occurrences, not unique bugs.** A course can appear on more than one surface, and one underlying issue can fail multiple test cases.
+Counts such as 262 field mismatches and 249 affected card occurrences are **observations, not counts of distinct defects**. Repeated displays of the same course and shared frontend data may contribute to multiple assertions.
 
 ## 2. Confirmed website defects
 
@@ -114,34 +104,16 @@ These must **not** be silently called confirmed website bugs or silently suppres
 - **Missing evidence:** A signed-off product requirement that the warning **must explicitly mention both letter cases**. Also distinguish message-content requirements from actual password acceptance rules.
 - **Next verification:** Inspect requirements or conduct focused password acceptance boundary tests if those rules are not otherwise covered. Do not declare the missing words a confirmed defect solely from these assertions.
 
-## 4. Automation and tooling exceptions
+## 4. Automation and tooling notes (not website defects)
 
-### VL-AUT-009 | Promotional text incorrectly compared to course title
+- **VL-AUT-009, corrected:** STAB-010 removed the unsupported comparison between a promotional main-card `h6` and the SubCard's course title. The correction is **merged into GitHub `main`** (PR #18). A subsequent targeted run reduced Category SubCard field failures from **747 to 498**, but did **not** make those tests pass. Remaining failures must not be hidden.
+- **VL-ENV-010, non-blocking:** The historical run logged a Chrome/Selenium CDP version-compatibility warning; all eight test classes nevertheless executed. Treat this as tooling maintenance, not an explanation for business assertion failures.
+- **Source-description follow-up:** The `CourseListTests` descriptions for the three SubCard content tests may still describe comparing the main-card course name to the SubCard title. Their descriptions should be reviewed against the corrected assertion; this is a documentation/test-metadata issue, **not a website defect**.
 
-- **Status:** **Corrected locally in STAB-010**, as verified by the user's local source check (`requireSubCardValue("Course name", ...)` replacing the old `compareRequired("Course name", ...)`) and the targeted reduction from 747 to 498 Category field failures.
-- **Scope:** `CourseSubCardContentSupport.inspect()` requires a nonblank SubCard course name but no longer equates that title to the parent card's promotional text. Instructor, duration, level, description and button checks remain active.
-- **Release caveat:** GitHub `main` at `3abd78d...`, checked on 18 October, **still contains** the old `compareRequired("Course name", ...)` call. The verified fix lives in the **local working tree** until committed and merged.
-- **Outstanding documentation:** The three `CourseListTests` `@Description` strings on GitHub still claim the course-name equality is tested; update them when synchronizing local code. Do not overwrite newer local files with old GitHub copies.
+## 5. Current disposition
 
-### VL-ENV-010 | Selenium CDP minor-version warning
+The repository contains the corrected STAB-010 assertion, the README, and a separate [Test Execution Report](TEST_EXECUTION_REPORT.md). **No full regression after STAB-010 has been documented**, so the historical 51-pass/14-fail count remains historical.
 
-- **Observed:** Chrome 155 and Selenium's available CDP support do not exactly match; Selenium logged fallback/compatibility warnings.
-- **Status:** Non-blocking in the audited run; all test classes executed.
-- **Action:** Check a supported Selenium/Chrome CDP combination as a **separate maintenance change**, not an explanation for the above assertion mismatches.
+The confirmed website findings above are not declared fixed. The SubCard presence requirement, exact Detail button wording, and password uppercase/lowercase warning wording remain **unverified**. Clarify those requirements before accepting or closing the related assertions.
 
-## 5. Impact on release and acceptance
-
-- **Automation execution:** Functional. Pre-STAB-010 full run: 51 passed / 14 failed / 0 skipped; Login, Enrollment, Cancellation and E2E were all passing in that run.
-- **Product:** Has demonstrated content/link/message inconsistencies. A full-green test suite is **not** an honest acceptance criterion for the current demo site.
-- **Test reliability:** Improved by STAB-010, but the SubCard presence and button-label contracts still require confirmation.
-- **GitHub synchronization:** **Not finished.** Do not label `main` as containing STAB-010 merely because the local command ran successfully.
-- **Documentation:** This register groups repeated test failures by underlying issue and explicitly marks uncertainty. The latest full-suite pass/fail total **has not been recalculated** after STAB-010.
-
-## 6. Next release actions, in order
-
-1. **Resolve the two remaining specification questions without a broad rerun:** Is SubCard mandatory on Homepage/Catalogue, and what exact Detail button text is required? Clarify uppercase/lowercase password wording from a product requirement.
-2. **Synchronize local fixes to GitHub** using a branch/PR or a checked commit. Compare `git diff` against `main` first; never replace locally newer project files with the old repository snapshot.
-3. **Update README** with the 65-test historical baseline, this known-defects document, and the distinction between confirmed product issues and requirement questions. Do not write an undocumented 'all tests passing' claim.
-4. **Perform final verification on the merged code** and record new totals only if that final run occurs. Preserve genuine site failures and store the updated Allure/Gradle evidence for handover.
-
-**Handover verdict:** Test framework functional; known product defects documented; clean product acceptance **not established**; release documentation and GitHub merge remain outstanding.
+**Handover assessment:** The automated suite was executable in the recorded full run; documented product inconsistencies remain; a clean product acceptance decision has not been established.
